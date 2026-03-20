@@ -1,0 +1,244 @@
+1
+00:00:00,000 --> 00:00:00,453
+<font color="#FFFF00">1.</font> Breathtaking footage of Mars landing sparks global awe suddenly.
+
+2
+00:00:00,453 --> 00:00:00,906
+1. <font color="#FFFF00">Breathtaking</font> footage of Mars landing sparks global awe suddenly.
+
+3
+00:00:00,906 --> 00:00:01,359
+1. Breathtaking <font color="#FFFF00">footage</font> of Mars landing sparks global awe suddenly.
+
+4
+00:00:01,359 --> 00:00:01,812
+1. Breathtaking footage <font color="#FFFF00">of</font> Mars landing sparks global awe suddenly.
+
+5
+00:00:01,812 --> 00:00:02,265
+1. Breathtaking footage of <font color="#FFFF00">Mars</font> landing sparks global awe suddenly.
+
+6
+00:00:02,265 --> 00:00:02,718
+1. Breathtaking footage of Mars <font color="#FFFF00">landing</font> sparks global awe suddenly.
+
+7
+00:00:02,718 --> 00:00:03,170
+1. Breathtaking footage of Mars landing <font color="#FFFF00">sparks</font> global awe suddenly.
+
+8
+00:00:03,170 --> 00:00:03,623
+1. Breathtaking footage of Mars landing sparks <font color="#FFFF00">global</font> awe suddenly.
+
+9
+00:00:03,623 --> 00:00:04,076
+1. Breathtaking footage of Mars landing sparks global <font color="#FFFF00">awe</font> suddenly.
+
+10
+00:00:04,076 --> 00:00:04,529
+1. Breathtaking footage of Mars landing sparks global awe <font color="#FFFF00">suddenly.</font>
+
+11
+00:00:04,529 --> 00:00:05,076
+<font color="#FFFF00">2.</font> SpaceX revolutionizes space travel with unprecedented success stories unfold.
+
+12
+00:00:05,076 --> 00:00:05,623
+2. <font color="#FFFF00">SpaceX</font> revolutionizes space travel with unprecedented success stories unfold.
+
+13
+00:00:05,623 --> 00:00:06,170
+2. SpaceX <font color="#FFFF00">revolutionizes</font> space travel with unprecedented success stories unfold.
+
+14
+00:00:06,170 --> 00:00:06,717
+2. SpaceX revolutionizes <font color="#FFFF00">space</font> travel with unprecedented success stories unfold.
+
+15
+00:00:06,717 --> 00:00:07,264
+2. SpaceX revolutionizes space <font color="#FFFF00">travel</font> with unprecedented success stories unfold.
+
+16
+00:00:07,264 --> 00:00:07,811
+2. SpaceX revolutionizes space travel <font color="#FFFF00">with</font> unprecedented success stories unfold.
+
+17
+00:00:07,811 --> 00:00:08,358
+2. SpaceX revolutionizes space travel with <font color="#FFFF00">unprecedented</font> success stories unfold.
+
+18
+00:00:08,358 --> 00:00:08,905
+2. SpaceX revolutionizes space travel with unprecedented <font color="#FFFF00">success</font> stories unfold.
+
+19
+00:00:08,905 --> 00:00:09,452
+2. SpaceX revolutionizes space travel with unprecedented success <font color="#FFFF00">stories</font> unfold.
+
+20
+00:00:09,452 --> 00:00:09,999
+2. SpaceX revolutionizes space travel with unprecedented success stories <font color="#FFFF00">unfold.</font>
+
+21
+00:00:09,999 --> 00:00:10,474
+<font color="#FFFF00">3.</font> First-ever crewed mission touches down safely on Martian surface.
+
+22
+00:00:10,474 --> 00:00:10,949
+3. <font color="#FFFF00">First-ever</font> crewed mission touches down safely on Martian surface.
+
+23
+00:00:10,949 --> 00:00:11,425
+3. First-ever <font color="#FFFF00">crewed</font> mission touches down safely on Martian surface.
+
+24
+00:00:11,425 --> 00:00:11,900
+3. First-ever crewed <font color="#FFFF00">mission</font> touches down safely on Martian surface.
+
+25
+00:00:11,900 --> 00:00:12,375
+3. First-ever crewed mission <font color="#FFFF00">touches</font> down safely on Martian surface.
+
+26
+00:00:12,375 --> 00:00:12,850
+3. First-ever crewed mission touches <font color="#FFFF00">down</font> safely on Martian surface.
+
+27
+00:00:12,850 --> 00:00:13,325
+3. First-ever crewed mission touches down <font color="#FFFF00">safely</font> on Martian surface.
+
+28
+00:00:13,325 --> 00:00:13,801
+3. First-ever crewed mission touches down safely <font color="#FFFF00">on</font> Martian surface.
+
+29
+00:00:13,801 --> 00:00:14,276
+3. First-ever crewed mission touches down safely on <font color="#FFFF00">Martian</font> surface.
+
+30
+00:00:14,276 --> 00:00:14,751
+3. First-ever crewed mission touches down safely on Martian <font color="#FFFF00">surface.</font>
+
+31
+00:00:14,751 --> 00:00:15,200
+<font color="#FFFF00">4.</font> The incredible 18-month journey pays off in remarkable ways.
+
+32
+00:00:15,200 --> 00:00:15,649
+4. <font color="#FFFF00">The</font> incredible 18-month journey pays off in remarkable ways.
+
+33
+00:00:15,649 --> 00:00:16,097
+4. The <font color="#FFFF00">incredible</font> 18-month journey pays off in remarkable ways.
+
+34
+00:00:16,097 --> 00:00:16,546
+4. The incredible <font color="#FFFF00">18-month</font> journey pays off in remarkable ways.
+
+35
+00:00:16,546 --> 00:00:16,995
+4. The incredible 18-month <font color="#FFFF00">journey</font> pays off in remarkable ways.
+
+36
+00:00:16,995 --> 00:00:17,444
+4. The incredible 18-month journey <font color="#FFFF00">pays</font> off in remarkable ways.
+
+37
+00:00:17,444 --> 00:00:17,892
+4. The incredible 18-month journey pays <font color="#FFFF00">off</font> in remarkable ways.
+
+38
+00:00:17,892 --> 00:00:18,341
+4. The incredible 18-month journey pays off <font color="#FFFF00">in</font> remarkable ways.
+
+39
+00:00:18,341 --> 00:00:18,790
+4. The incredible 18-month journey pays off in <font color="#FFFF00">remarkable</font> ways.
+
+40
+00:00:18,790 --> 00:00:19,239
+4. The incredible 18-month journey pays off in remarkable <font color="#FFFF00">ways.</font>
+
+41
+00:00:19,239 --> 00:00:19,642
+<font color="#FFFF00">5.</font> Watch in awe as Starship soars over rust-red terrain.
+
+42
+00:00:19,642 --> 00:00:20,045
+5. <font color="#FFFF00">Watch</font> in awe as Starship soars over rust-red terrain.
+
+43
+00:00:20,045 --> 00:00:20,449
+5. Watch <font color="#FFFF00">in</font> awe as Starship soars over rust-red terrain.
+
+44
+00:00:20,449 --> 00:00:20,852
+5. Watch in <font color="#FFFF00">awe</font> as Starship soars over rust-red terrain.
+
+45
+00:00:20,852 --> 00:00:21,256
+5. Watch in awe <font color="#FFFF00">as</font> Starship soars over rust-red terrain.
+
+46
+00:00:21,256 --> 00:00:21,659
+5. Watch in awe as <font color="#FFFF00">Starship</font> soars over rust-red terrain.
+
+47
+00:00:21,659 --> 00:00:22,063
+5. Watch in awe as Starship <font color="#FFFF00">soars</font> over rust-red terrain.
+
+48
+00:00:22,063 --> 00:00:22,466
+5. Watch in awe as Starship soars <font color="#FFFF00">over</font> rust-red terrain.
+
+49
+00:00:22,466 --> 00:00:22,870
+5. Watch in awe as Starship soars over <font color="#FFFF00">rust-red</font> terrain.
+
+50
+00:00:22,870 --> 00:00:23,273
+5. Watch in awe as Starship soars over rust-red <font color="#FFFF00">terrain.</font>
+
+51
+00:00:23,273 --> 00:00:23,665
+<font color="#FFFF00">6.</font> What's next for humanity on the red planet's uncharted path?
+
+52
+00:00:23,665 --> 00:00:24,057
+6. <font color="#FFFF00">What's</font> next for humanity on the red planet's uncharted path?
+
+53
+00:00:24,057 --> 00:00:24,448
+6. What's <font color="#FFFF00">next</font> for humanity on the red planet's uncharted path?
+
+54
+00:00:24,448 --> 00:00:24,840
+6. What's next <font color="#FFFF00">for</font> humanity on the red planet's uncharted path?
+
+55
+00:00:24,840 --> 00:00:25,232
+6. What's next for <font color="#FFFF00">humanity</font> on the red planet's uncharted path?
+
+56
+00:00:25,232 --> 00:00:25,623
+6. What's next for humanity <font color="#FFFF00">on</font> the red planet's uncharted path?
+
+57
+00:00:25,623 --> 00:00:26,015
+6. What's next for humanity on <font color="#FFFF00">the</font> red planet's uncharted path?
+
+58
+00:00:26,015 --> 00:00:26,407
+6. What's next for humanity on the <font color="#FFFF00">red</font> planet's uncharted path?
+
+59
+00:00:26,407 --> 00:00:26,799
+6. What's next for humanity on the red <font color="#FFFF00">planet's</font> uncharted path?
+
+60
+00:00:26,799 --> 00:00:27,190
+6. What's next for humanity on the red planet's <font color="#FFFF00">uncharted</font> path?
+
+61
+00:00:27,190 --> 00:00:27,582
+6. What's next for humanity on the red planet's uncharted <font color="#FFFF00">path?</font>
+

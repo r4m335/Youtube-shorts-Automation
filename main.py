@@ -2,6 +2,9 @@ import os
 import sys
 import logging
 import time
+import glob
+import random
+import shutil
 from dotenv import load_dotenv
 
 from src.ingestion import get_topics
@@ -28,7 +31,38 @@ logging.basicConfig(
 
 MAX_VIDEOS_PER_RUN = 1
 
-def process_single_topic(topic):
+def run_garbage_collection(days_old=2):
+    """Deletes temporary rendering files and outputs older than 'days_old' to prevent storage bloat."""
+    logging.info(f"Running Garbage Collector (Cleaning pipeline artifacts older than {days_old} days)...")
+    now = time.time()
+    cutoff = now - (days_old * 86400)
+    
+    # 1. Clean data/ temp folders
+    if os.path.exists("data"):
+        for item in os.listdir("data"):
+            if item == "topics.json": continue
+            item_path = os.path.join("data", item)
+            if os.path.isdir(item_path):
+                try:
+                    if os.path.getmtime(item_path) < cutoff:
+                        shutil.rmtree(item_path)
+                        logging.info(f"GC: Reclaimed storage from old temp directory {item_path}")
+                except Exception as e:
+                    logging.warning(f"GC: Could not delete {item_path}: {e}")
+                    
+    # 2. Clean output/ videos
+    if os.path.exists("output"):
+        for item in os.listdir("output"):
+            item_path = os.path.join("output", item)
+            if os.path.isfile(item_path):
+                try:
+                    if os.path.getmtime(item_path) < cutoff:
+                        os.remove(item_path)
+                        logging.info(f"GC: Reclaimed storage from old output video {item_path}")
+                except Exception as e:
+                    logging.warning(f"GC: Could not delete {item_path}: {e}")
+
+def process_single_topic(topic, category):
     logging.info(f"--- Starting pipeline for topic: '{topic}' ---")
     
     # 1. Script Generation
@@ -85,7 +119,6 @@ def process_single_topic(topic):
     if not concat_video_segments(video_segments, vid_concat): return False
     
     # 7. Mix Final
-    import glob, random
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
     final_mp4 = os.path.join(output_dir, f"{topic_hash}_final.mp4")
@@ -113,7 +146,9 @@ def process_single_topic(topic):
 
 def main():
     logging.info("Starting YouTube Shorts Pipeline Run")
-    topics = get_topics()
+    run_garbage_collection(days_old=2)
+    
+    category, topics = get_topics()
     
     if not topics:
         logging.info("No new valid topics found. Exiting.")
@@ -126,7 +161,7 @@ def main():
             break
             
         try:
-            if process_single_topic(topic):
+            if process_single_topic(topic, category):
                 success_count += 1
                 with open("logs/success.log", "a") as f:
                     f.write(f"{time.time()},{topic}\n")

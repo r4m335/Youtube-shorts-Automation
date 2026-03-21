@@ -1,0 +1,30 @@
+
+# Ignore Python virtual env
+venv/
+
+# Env files
+.env
+.env.*
+
+# Generated output
+output/
+logs/
+data/
+assets/
+
+# Media
+*.mp4
+*.wav
+*.srt
+*.jpg
+*.mp3
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS & Auth
+.DS_Store
+Thumbs.db
+token.json
+client_secret.json

@@ -28,7 +28,7 @@ def get_authenticated_service():
             token.write(creds.to_json())
     return build("youtube", "v3", credentials=creds)
 
-def upload_video(file_path, title, description, tags, privacy_status="private", thumbnail_path=None):
+def upload_video(file_path, title, description, tags, privacy_status="public", thumbnail_path=None):
     youtube = get_authenticated_service()
     if not youtube:
         return False

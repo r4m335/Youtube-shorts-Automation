@@ -16,6 +16,11 @@ def generate_gemini(prompt):
                     {"text": prompt}
                 ]
             }
+        ],
+        "tools": [
+            {
+                "googleSearch": {}
+            }
         ]
     }
     

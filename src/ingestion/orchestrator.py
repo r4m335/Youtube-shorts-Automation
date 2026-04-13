@@ -1,58 +1,44 @@
+import os
 import random
 import logging
 import json
 import datetime
-import urllib.request
-import urllib.parse
+import requests
 import xml.etree.ElementTree as ET
 from src.llm.providers import PROVIDERS
 
 CATEGORIES = [
     {
-        "name": "Hollywood & Entertainment",
-        "description": "Trending Hollywood news, Marvel, DC, Star Wars, major casting rumors, and new movie trailers."
-    },
-    {
-        "name": "European Football",
-        "description": "Latest match reports, shock transfers, or drama regarding Barcelona, Real Madrid, Bayern Munich, Chelsea, Arsenal, Man City, Man Utd, Liverpool, or PSG."
-    },
-    {
-        "name": "Tech & AI",
-        "description": "Breaking tech news, AI advancements, major gadget releases, or software releases."
-    },
-    {
-        "name": "Global News & Events",
-        "description": "Major global incidents, geopolitics, wars, or historic trustful news media reports."
-    },
-    {
-        "name": "Trivia & Quiz",
-        "description": "Engaging interactive trivia questions where the audience has to guess the answer."
-    },
-    {
-        "name": "Conspiracy & Paranormal",
-        "description": "Engaging conspiracy theories, alien sightings, paranormal events, or unexplained mysteries."
+        "name": "Top Trending Global News",
+        "description": "The absolute biggest, most viral breaking news stories happening in the world right now across all major subjects (World Events, Science, Major Tech, Pop Culture)."
     }
 ]
 
-def fetch_real_time_news(category_name):
-    query_map = {
-        "Hollywood & Entertainment": "Hollywood movies entertainment celebrity",
-        "European Football": "European football soccer premier league transfers",
-        "Tech & AI": "Technology Artificial Intelligence Gadgets",
-        "Global News & Events": "World breaking news",
-        "Trivia & Quiz": "Interesting obscure facts trivia",
-        "Conspiracy & Paranormal": "Unexplained mystery UFO paranormal"
-    }
-    query_str = query_map.get(category_name, category_name)
-    url = f"https://news.google.com/rss/search?q={urllib.parse.quote(query_str)}&hl=en-US&gl=US&ceid=US:en"
+def get_recent_topics():
+    """Reads the JSON ledger to inject semantic awareness of what the channel already posted."""
+    topics_file = os.path.join("data", "topics.json")
+    if not os.path.exists(topics_file):
+        return []
+    try:
+        with open(topics_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            sorted_topics = sorted(data.items(), key=lambda x: x[1].get('timestamp', 0), reverse=True)
+            return [k for k, v in sorted_topics[:25]]
+    except Exception as e:
+        logging.warning(f"Could not read recent topics for deduplication: {e}")
+        return []
+
+def fetch_google_news_fallback():
+    # Fetch top generic US/World news strictly from the last 24 hours
+    url = "https://news.google.com/rss/search?q=when%3A1d&hl=en-US&gl=US&ceid=US:en"
     
     headlines = []
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            xml_data = response.read()
-            
-        root = ET.fromstring(xml_data)
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NewsBot/1.0'}
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        root = ET.fromstring(response.text)
         for item in root.findall('./channel/item')[:15]: 
             title = item.find('title').text
             if " - " in title:
@@ -60,29 +46,63 @@ def fetch_real_time_news(category_name):
             headlines.append(title)
             
     except Exception as e:
-        logging.warning(f"Failed to fetch live RSS news for {category_name}: {e}")
+        logging.warning(f"Failed to fetch live generic RSS news: {e}")
+        
+    return headlines
+
+def fetch_real_time_news():
+    # Combine the biggest worldwide subreddits into one massive viral fetch
+    subreddits = "worldnews+news+technology+science+entertainment"
+    url = f"https://www.reddit.com/r/{subreddits}/top.json?t=day&limit=15"
+    
+    headlines = []
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) YTAutomationBot/1.0'}
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+            
+        for child in data.get('data', {}).get('children', []):
+            title = child.get('data', {}).get('title', '')
+            if title:
+                headlines.append(title)
+                
+    except Exception as e:
+        logging.warning(f"Reddit API failed for global fetch: {e}. Falling back to generic Google News when:1d")
+        return fetch_google_news_fallback()
+        
+    if not headlines:
+        return fetch_google_news_fallback()
         
     return headlines
 
 def generate_category_topics():
-    category = random.choice(CATEGORIES)
+    category = CATEGORIES[0]
     logging.info(f"Orchestrator selected category: {category['name']}")
     
     today = datetime.datetime.now().strftime("%B %d, %Y")
     
     # Pre-fetch the exact internet headlines right now
-    live_headlines = fetch_real_time_news(category['name'])
-    live_context = "\n".join([f"- {h}" for h in live_headlines]) if live_headlines else "No live context available. Rely on exact date."
+    live_headlines = fetch_real_time_news()
+    live_context = "\n".join([f"- {h}" for h in live_headlines]) if live_headlines else "No live context available"
+    
+    # Fetch recent video histories to completely prevent duplications
+    recent_topics = get_recent_topics()
+    avoid_context = "\n".join([f"- {t}" for t in recent_topics]) if recent_topics else "None"
     
     prompt = f"""
 Today's date is: {today}. 
 
-To ensure 100% factual and current information, here are the absolute latest real breaking news headlines pulled from the internet right now for this category:
+To ensure 100% factual and current information, here are the absolute latest real viral breaking news headlines pulled from the internet right now (past 24h):
 {live_context}
 
-You MUST ONLY select massive real global news stories from TODAY based explicitly on those real headlines above. DO NOT invent fictional events. DO NOT use old news from past months or years. 
+CRITICAL ANTI-DUPLICATION RULE:
+You MUST NOT generate any topic that covers the same event, person, or semantic meaning as these recently uploaded videos:
+{avoid_context}
 
-Generate 3 highly engaging, distinct, and currently trending REAL breaking news topics that fit this specific category:
+You MUST ONLY select massive real global news stories from exactly TODAY based explicitly on those real headlines above. DO NOT invent fictional events. DO NOT use old news from past months or years.
+
+Generate 3 highly engaging, distinct, and currently trending REAL breaking news topics across those subjects:
 Category: {category['name']}
 Focus guidelines: {category['description']}
 
@@ -94,13 +114,20 @@ Example output format:
     for provider_name, provider_func in PROVIDERS:
         try:
             raw_response = provider_func(prompt)
-            raw_response = raw_response.replace("```json", "").replace("```", "").strip()
+            # Basic cleanup of markdown
+            raw_response = raw_response.strip()
+            if raw_response.startswith("```json"):
+                raw_response = raw_response[7:]
+            if raw_response.endswith("```"):
+                raw_response = raw_response[:-3]
+            raw_response = raw_response.strip()
+            
             topics = json.loads(raw_response)
             if isinstance(topics, list) and len(topics) >= 1:
                 logging.info(f"Orchestrator successfully generated exact topics via {provider_name}.")
                 return category["name"], topics
         except Exception as e:
-            logging.warning(f"Orchestrator failed to generate topics with {provider_name}")
+            logging.warning(f"Orchestrator failed to generate topics with {provider_name}: {e}")
             
     logging.error("All providers failed to generate categorical topics.")
     return category["name"], []

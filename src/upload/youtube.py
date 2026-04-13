@@ -17,7 +17,14 @@ def get_authenticated_service():
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                logging.warning(f"Failed to refresh YouTube auth token: {e}. Re-authenticating...")
+                if os.path.exists(TOKEN_FILE):
+                    os.remove(TOKEN_FILE)
+                flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
+                creds = flow.run_local_server(port=0)
         else:
             if not os.path.exists(CREDENTIALS_FILE):
                 logging.warning(f"{CREDENTIALS_FILE} not found. Cannot authenticate YouTube.")

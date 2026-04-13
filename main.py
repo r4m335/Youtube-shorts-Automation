@@ -29,7 +29,7 @@ logging.basicConfig(
     ]
 )
 
-MAX_VIDEOS_PER_RUN = 1
+MAX_VIDEOS_PER_RUN = 3
 
 def run_garbage_collection(days_old=2):
     """Deletes temporary rendering files and outputs older than 'days_old' to prevent storage bloat."""

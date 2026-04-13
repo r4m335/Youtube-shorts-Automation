@@ -37,25 +37,33 @@ def generate_gemini(prompt):
 def generate_groq(prompt):
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key: raise ValueError("GROQ_API_KEY missing")
-    client = Groq(api_key=api_key)
-    chat_completion = client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="llama-3.1-8b-instant",
-    )
-    return chat_completion.choices[0].message.content
+    try:
+        client = Groq(api_key=api_key)
+        chat_completion = client.chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="llama-3.1-8b-instant",
+        )
+        return chat_completion.choices[0].message.content
+    except Exception as e:
+        logging.error(f"Groq API Error: {e}")
+        raise e
 
 def generate_openrouter(prompt):
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key: raise ValueError("OPENROUTER_API_KEY missing")
-    client = OpenAI(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-    )
-    completion = client.chat.completions.create(
-        model="mistralai/mistral-7b-instruct:free",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return completion.choices[0].message.content
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
+        completion = client.chat.completions.create(
+            model="mistralai/mistral-7b-instruct:free",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        return completion.choices[0].message.content
+    except Exception as e:
+        logging.error(f"OpenRouter API Error: {e}")
+        raise e
 
 def generate_ollama(prompt):
     url = "http://localhost:11434/api/generate"

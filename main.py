@@ -24,12 +24,12 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler("logs/system.log"),
-        logging.StreamHandler()
+        logging.FileHandler("logs/system.log", encoding="utf-8"),
+        logging.StreamHandler(stream=open(sys.stdout.fileno(), mode='w', encoding='utf-8', closefd=False))
     ]
 )
 
-MAX_VIDEOS_PER_RUN = 3
+
 
 def run_garbage_collection(days_old=2):
     """Deletes temporary rendering files and outputs older than 'days_old' to prevent storage bloat."""
@@ -39,8 +39,10 @@ def run_garbage_collection(days_old=2):
     
     # 1. Clean data/ temp folders
     if os.path.exists("data"):
+        # Files to preserve in data/
+        PRESERVE = {"topics.json", "tweets.db", "accounts.db"}
         for item in os.listdir("data"):
-            if item == "topics.json": continue
+            if item in PRESERVE: continue
             item_path = os.path.join("data", item)
             if os.path.isdir(item_path):
                 try:
@@ -138,39 +140,96 @@ def process_single_topic(topic, category):
     
     # 8. Upload
     title, desc, tags = generate_metadata(topic, lines[0])
-    # Uncomment to actually upload:
     upload_video(final_mp4, title, desc, tags, thumbnail_path=thumb_path)
     
     logging.info(f"--- Pipeline complete for topic: '{topic}' ---")
     return True
 
+
+# ---------------------------------------------------------------------------
+# Scheduler Configuration
+# ---------------------------------------------------------------------------
+SCHEDULER_INTERVAL = 300  # 5 minutes in seconds
+
+
 def main():
-    logging.info("Starting YouTube Shorts Pipeline Run")
+    logging.info("=" * 60)
+    logging.info("Starting YouTube Shorts Pipeline — Continuous Scheduler Mode")
+    logging.info(f"Cycle interval: {SCHEDULER_INTERVAL // 60} minutes")
+    logging.info("=" * 60)
+
     run_garbage_collection(days_old=2)
-    
-    category, topics = get_topics()
-    
-    if not topics:
-        logging.info("No new valid topics found. Exiting.")
-        return
-        
-    success_count = 0
-    for topic in topics:
-        if success_count >= MAX_VIDEOS_PER_RUN:
-            logging.info(f"Reached max videos per run ({MAX_VIDEOS_PER_RUN}). Stopping.")
-            break
-            
+
+    # Initialize tweet database
+    try:
+        from src.storage.database import init_db, cleanup_old
+        init_db()
+    except ImportError:
+        pass
+
+    cycle_count = 0
+
+    while True:
+        cycle_count += 1
+        cycle_start = time.time()
+        logging.info(f"--- Scheduler Cycle #{cycle_count} starting ---")
+
+        total_success = 0
+        total_attempted = 0
+
         try:
-            if process_single_topic(topic, category):
-                success_count += 1
-                with open("logs/success.log", "a") as f:
-                    f.write(f"{time.time()},{topic}\n")
+            # Clean old tweet DB entries periodically
+            try:
+                from src.storage.database import cleanup_old
+                cleanup_old(days=7)
+            except ImportError:
+                pass
+
+            logging.info("Fetching topics...")
+            category, topics = get_topics()
+
+            if not topics:
+                logging.info(
+                    f"No new topics found. Sleeping {SCHEDULER_INTERVAL // 60} minutes..."
+                )
+                time.sleep(SCHEDULER_INTERVAL)
+                continue
+
+            # Strip invisible Unicode characters
+            topics = [
+                t.replace('\u200b', '').replace('\u200c', '')
+                 .replace('\u200d', '').replace('\ufeff', '')
+                for t in topics
+            ]
+
+            logging.info(f"Got {len(topics)} new topic(s) from '{category}'. Processing...")
+
+            for topic in topics:
+                total_attempted += 1
+                try:
+                    if process_single_topic(topic, category):
+                        total_success += 1
+                        with open("logs/success.log", "a", encoding="utf-8") as f:
+                            f.write(f"{time.time()},{category},{topic}\n")
+                except Exception as e:
+                    logging.error(f"Top level error processing topic '{topic}': {e}")
+                    with open("logs/error.log", "a", encoding="utf-8") as f:
+                        f.write(f"{time.time()},{topic},{str(e)}\n")
+
+        except KeyboardInterrupt:
+            logging.info("Scheduler interrupted by user. Shutting down.")
+            break
         except Exception as e:
-            logging.error(f"Top level error processing topic '{topic}': {e}")
-            with open("logs/error.log", "a") as f:
-                f.write(f"{time.time()},{topic},{str(e)}\n")
-                
-    logging.info(f"Run completed. Generated {success_count} videos.")
+            logging.error(f"Scheduler cycle #{cycle_count} failed: {e}")
+
+        elapsed = time.time() - cycle_start
+        logging.info(
+            f"--- Cycle #{cycle_count} complete: "
+            f"{total_success}/{total_attempted} succeeded in {elapsed:.1f}s. "
+            f"Sleeping {SCHEDULER_INTERVAL // 60} minutes... ---"
+        )
+        time.sleep(SCHEDULER_INTERVAL)
 
 if __name__ == "__main__":
     main()
+

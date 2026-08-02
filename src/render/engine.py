@@ -10,12 +10,15 @@ def create_video_segment(visual_path, duration, output_path, fps=30):
     frames = int(duration * fps)
     
     if visual_path.lower().endswith('.mp4'):
-        # Video: Loop indefinitely, scale and crop to 9:16, trim exactly to duration
+        # Video: Loop indefinitely, scale and crop to 9:16, trim exactly to duration.
+        # -an strips any potentially corrupt audio from source Pexels clips;
+        # background audio is mixed in later by mix_final_video().
         command = [
             "ffmpeg", "-y", "-stream_loop", "-1", "-i", visual_path,
             "-t", str(duration),
             "-vf", ("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1"),
             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps),
+            "-an",
             output_path
         ]
     else:
@@ -49,7 +52,7 @@ def concat_video_segments(segment_paths, output_path):
             
     command = [
         "ffmpeg", "-y", "-f", "concat", "-safe", "0",
-        "-i", list_path, "-c", "copy", output_path
+        "-i", list_path, "-c", "copy", "-an", output_path
     ]
     try:
         subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

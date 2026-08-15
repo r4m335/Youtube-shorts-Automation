@@ -21,6 +21,7 @@ scripts/
 *.mp4
 *.wav
 *.srt
+*.ass
 *.jpg
 *.jpeg
 *.png

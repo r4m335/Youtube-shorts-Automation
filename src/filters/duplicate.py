@@ -87,20 +87,25 @@ def deduplicate_similar(tweets):
 
         clusters.append(cluster)
 
-    # From each cluster, pick the tweet with the highest engagement
+    # From each cluster, pick the tweet with the highest engagement and track story_count across accounts
     result = []
     merged_count = 0
     for cluster in clusters:
+        unique_authors = set(t.get("author", "unknown") for t in cluster)
+        story_count = len(unique_authors)
+
         if len(cluster) > 1:
             merged_count += len(cluster) - 1
-            # Sort by engagement (likes + retweets) descending
             best = max(cluster, key=lambda t: t.get("likes", 0) + t.get("retweets", 0))
-            logging.debug(
-                f"Merged {len(cluster)} similar tweets → kept @{best['author']}: "
-                f"'{best['text'][:60]}...'"
+            best["story_count"] = story_count
+            logging.info(
+                f"🔥 TRENDING STORY DETECTED: {story_count} accounts (@{', @'.join(list(unique_authors)[:4])}) "
+                f"posted about: '{best['text'][:60]}...'"
             )
         else:
             best = cluster[0]
+            best["story_count"] = 1
+
         result.append(best)
 
     if merged_count > 0:

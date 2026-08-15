@@ -1,7 +1,87 @@
 import subprocess
 import logging
 import os
+import asyncio
+import random
 
+# --------------------------------------------------------------------------- #
+# Voice pool — randomly picks one per video for variety
+# --------------------------------------------------------------------------- #
+TTS_VOICES = [
+    "en-US-JennyNeural",    # Storytelling, facts, general YouTube
+    "en-US-AndrewNeural",   # Documentary, educational, technology
+]
+
+# Pick one voice per session (consistent within a single video)
+_session_voice = None
+
+def _get_session_voice():
+    global _session_voice
+    if _session_voice is None:
+        _session_voice = random.choice(TTS_VOICES)
+        logging.info(f"TTS voice selected for this video: {_session_voice}")
+    return _session_voice
+
+def reset_session_voice():
+    """Call at the start of each new topic to pick a fresh voice."""
+    global _session_voice
+    _session_voice = None
+
+# --------------------------------------------------------------------------- #
+# Edge TTS (Primary — natural-sounding Microsoft Azure voices, FREE)
+# --------------------------------------------------------------------------- #
+async def _edge_tts_async(text, output_path, voice="en-US-JennyNeural"):
+    """Generate TTS using Edge TTS (Microsoft Azure voices via edge-tts package)."""
+    import edge_tts
+    communicate = edge_tts.Communicate(text, voice)
+    await communicate.save(output_path)
+
+
+def generate_tts_edge(text, output_path, voice=None):
+    """
+    Generate TTS using Edge TTS with natural-sounding voices.
+    
+    Voices used:
+    - en-US-JennyNeural (female, storytelling, facts — ⭐⭐⭐⭐⭐)
+    - en-US-AndrewNeural (male, documentary, educational — ⭐⭐⭐⭐⭐)
+    """
+    voice = voice or os.getenv("EDGE_TTS_VOICE", _get_session_voice())
+    
+    try:
+        # Run async edge-tts in a sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(_edge_tts_async(text, output_path, voice))
+        finally:
+            loop.close()
+        
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            logging.error("Edge TTS succeeded but output file is empty or missing.")
+            return False
+        
+        # Edge TTS outputs MP3 — convert to WAV for pipeline compatibility
+        wav_path = output_path
+        if output_path.lower().endswith('.wav'):
+            mp3_temp = output_path + ".mp3"
+            os.rename(output_path, mp3_temp)
+            command = [
+                "ffmpeg", "-y", "-i", mp3_temp,
+                "-acodec", "pcm_s16le", "-ar", "22050", "-ac", "1",
+                wav_path
+            ]
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+            os.remove(mp3_temp)
+        
+        return True
+    except Exception as e:
+        logging.error(f"Edge TTS failed: {e}")
+        return False
+
+
+# --------------------------------------------------------------------------- #
+# Piper TTS (Fallback 1 — offline, fast)
+# --------------------------------------------------------------------------- #
 def generate_tts_piper(text, output_path, model_path=None):
     """Generate TTS using Piper via CLI."""
     model_full_path = model_path or os.getenv("PIPER_MODEL_PATH", r"C:\piper\models\en_US-lessac-medium.onnx")
@@ -25,6 +105,9 @@ def generate_tts_piper(text, output_path, model_path=None):
         logging.error(f"Piper TTS failed: {e.stderr.decode('utf-8', errors='ignore')}")
         return False
 
+# --------------------------------------------------------------------------- #
+# Coqui TTS (Fallback 2)
+# --------------------------------------------------------------------------- #
 def generate_tts_coqui(text, output_path):
     """Fallback TTS using Coqui TTS via CLI."""
     safe_text = text.replace('"', '\\"')
@@ -36,10 +119,23 @@ def generate_tts_coqui(text, output_path):
         logging.error(f"Coqui TTS failed: {e.stderr.decode('utf-8', errors='ignore')}")
         return False
 
+# --------------------------------------------------------------------------- #
+# Main TTS entry point with fallback chain
+# --------------------------------------------------------------------------- #
 def generate_line_audio(text, output_path):
-    """Attempts to generate TTS for a single line using Piper, falling back to Coqui."""
+    """
+    Attempts to generate TTS for a single line using the best available engine.
+    Fallback chain: Edge TTS → Piper → Coqui
+    """
+    # Primary: Edge TTS (natural-sounding, free)
+    if generate_tts_edge(text, output_path):
+        return True
+    
+    # Fallback 1: Piper (offline, fast)
+    logging.warning("Edge TTS failed, falling back to Piper TTS")
     if generate_tts_piper(text, output_path):
         return True
     
+    # Fallback 2: Coqui
     logging.warning("Piper failed, falling back to Coqui TTS")
     return generate_tts_coqui(text, output_path)

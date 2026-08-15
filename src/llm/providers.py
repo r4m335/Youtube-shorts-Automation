@@ -8,7 +8,7 @@ def generate_gemini(prompt):
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key: raise ValueError("GEMINI_API_KEY missing")
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
     payload = {
         "contents": [
             {
@@ -57,7 +57,7 @@ def generate_openrouter(prompt):
             api_key=api_key,
         )
         completion = client.chat.completions.create(
-            model="mistralai/mistral-7b-instruct:free",
+            model="nvidia/nemotron-3.5-lightning:free",
             messages=[{"role": "user", "content": prompt}]
         )
         return completion.choices[0].message.content

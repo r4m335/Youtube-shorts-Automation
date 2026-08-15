@@ -71,19 +71,19 @@ def _try_x_ingestion():
     category, topics = generate_topics_from_tweets(accepted)
     if not topics:
         logging.info("X Ingestion: tweet-to-topic conversion produced no topics. Falling back.")
-        return None, []
+        return None, [], []
 
     # Step 8: Filter through the existing cache dedup
     valid_topics = filter_and_cache_topics(topics, source=f"x_{category}")
     if not valid_topics:
         logging.info("X Ingestion: all topics were duplicates in cache. Falling back.")
-        return None, []
+        return None, [], []
 
     logging.info(
         f"X Ingestion complete: {len(valid_topics)} new valid topics "
         f"from category '{category}'."
     )
-    return category, valid_topics
+    return category, valid_topics, accepted
 
 
 def get_topics():
@@ -96,15 +96,16 @@ def get_topics():
       2. Category walk — Global News → Tech → Football → Movies → Anime
 
     Returns:
-        (category_name, topics_list)
+        (category_name, topics_list, source_tweets)
+        source_tweets is a list of tweet dicts with 'media' URLs (empty list if from RSS/Reddit).
     """
     logging.info("Starting topic ingestion process.")
 
     # --- Primary: X (twscrape) ingestion ---
     try:
-        category, topics = _try_x_ingestion()
+        category, topics, source_tweets = _try_x_ingestion()
         if topics:
-            return category, topics
+            return category, topics, source_tweets
     except Exception as e:
         logging.warning(f"X ingestion failed with error: {e}. Falling back to categories.")
 
@@ -131,7 +132,7 @@ def get_topics():
                     f"Ingestion complete. Found {len(valid_topics)} new valid topics "
                     f"in '{cat_name}'."
                 )
-                return name, valid_topics
+                return name, valid_topics, []  # No source tweets from RSS/Reddit
 
             logging.warning(
                 f"[{cat_name}] Attempt {attempt}: All topics were duplicates/invalid. "
@@ -141,4 +142,4 @@ def get_topics():
         logging.warning(f"Category '{cat_name}' exhausted — no unique valid topics found.")
 
     logging.error("All categories exhausted. No unique valid topics found.")
-    return "Unknown", []
+    return "Unknown", [], []

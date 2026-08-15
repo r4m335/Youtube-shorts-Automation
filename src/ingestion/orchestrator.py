@@ -69,8 +69,8 @@ def get_recent_topics():
 # ---------------------------------------------------------------------------
 
 def fetch_google_news_fallback():
-    """Fetches top generic US/World news from the last 24 hours via RSS."""
-    url = "https://news.google.com/rss/search?q=when%3A1d&hl=en-US&gl=US&ceid=US:en"
+    """Fetches top generic World news from the last 24 hours via RSS."""
+    url = "https://news.google.com/rss/search?q=world+news+when%3A1d&hl=en-US&gl=US&ceid=US:en"
     headlines = []
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) NewsBot/1.0'}
@@ -296,14 +296,15 @@ def _build_tweet_to_topic_prompt(tweets, avoid_context, today):
     """Builds a prompt that converts raw tweet texts into clean video topic titles."""
     tweet_lines = []
     for i, tweet in enumerate(tweets, 1):
+        trending_tag = f" [TRENDING - Reported by {tweet['story_count']} accounts]" if tweet.get("story_count", 1) > 1 else ""
         tweet_lines.append(
-            f"{i}. @{tweet['author']}: \"{tweet['text'][:200]}\""
+            f"{i}.{trending_tag} @{tweet['author']}: \"{tweet['text'][:200]}\""
         )
     tweet_context = "\n".join(tweet_lines)
 
     return f"""Today's date is: {today}.
 
-Here are real tweets from verified news accounts on X, posted in the last 24 hours:
+Here are real tweets from verified news accounts on X, posted in the last 24 hours (trending multi-account stories listed first):
 {tweet_context}
 
 CRITICAL ANTI-DUPLICATION RULE:
@@ -313,6 +314,8 @@ You MUST NOT generate any topic that covers the same event, person, or semantic 
 Convert each tweet into a clean, engaging topic title suitable for a YouTube Shorts video.
 
 Rules:
+- Give TOP PRIORITY to items tagged as [TRENDING - Reported by N accounts]
+- GLOBAL NEWS RULE: Prioritize major international world news, global events, worldwide sports, tech, and entertainment. DO NOT generate topics about minor local US city/state politics (e.g. local primary polls, local state legislation, small US city council updates).
 - Each topic must be a concise, factual headline (3-8 words)
 - Do NOT copy the tweet text verbatim — rephrase into a clean title
 - Do NOT include author names, @mentions, hashtags, or URLs
@@ -324,9 +327,23 @@ Example: ["OpenAI Releases GPT-6", "Apple Unveils M5 Chips"]
 """
 
 
+CATEGORY_PRIORITY = [
+    "world", "sports", "Anime"
+]
+
+
+def _get_category_rank(cat_name):
+    cat_lower = str(cat_name).lower()
+    for idx, prio in enumerate(CATEGORY_PRIORITY):
+        if prio.lower() == cat_lower:
+            return idx
+    return len(CATEGORY_PRIORITY)
+
+
 def generate_topics_from_tweets(filtered_tweets):
     """
     Converts filtered tweet dicts into clean topic titles using the LLM.
+    Prioritizes multi-account trending stories first, then category priority rank.
 
     Args:
         filtered_tweets: List of normalized, filtered tweet dicts.
@@ -337,18 +354,25 @@ def generate_topics_from_tweets(filtered_tweets):
     if not filtered_tweets:
         return "Unknown", []
 
+    # Sort tweets: Multi-account trending stories FIRST (-story_count), then category priority rank, then importance
+    sorted_tweets = sorted(
+        filtered_tweets,
+        key=lambda t: (
+            -t.get("story_count", 1),
+            _get_category_rank(t.get("category", "unknown")),
+            -t.get("importance", 5),
+            -(t.get("likes", 0) + t.get("retweets", 0))
+        )
+    )
+
     today = datetime.datetime.now().strftime("%B %d, %Y")
     recent_topics = get_recent_topics()
     avoid_context = "\n".join([f"- {t}" for t in recent_topics]) if recent_topics else "None"
 
-    # Determine the dominant category from the tweets
-    category_counts = {}
-    for tweet in filtered_tweets:
-        cat = tweet.get("category", "unknown")
-        category_counts[cat] = category_counts.get(cat, 0) + 1
-    dominant_category = max(category_counts, key=category_counts.get)
+    # Highest priority category present in the candidate set
+    top_category = sorted_tweets[0].get("category", "world")
 
-    prompt = _build_tweet_to_topic_prompt(filtered_tweets, avoid_context, today)
+    prompt = _build_tweet_to_topic_prompt(sorted_tweets, avoid_context, today)
 
     for provider_name, provider_func in PROVIDERS:
         try:
@@ -367,11 +391,11 @@ def generate_topics_from_tweets(filtered_tweets):
             if isinstance(topics, list) and len(topics) >= 1:
                 logging.info(
                     f"Generated {len(topics)} topic(s) from tweets via {provider_name} "
-                    f"(category: {dominant_category})."
+                    f"(category: {top_category})."
                 )
-                return dominant_category, topics
+                return top_category, topics
         except Exception as e:
             logging.warning(f"Provider {provider_name} failed for tweet-to-topic: {e}")
 
     logging.warning("All providers failed for tweet-to-topic conversion.")
-    return dominant_category, []
+    return top_category, []

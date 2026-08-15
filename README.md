@@ -12,11 +12,14 @@ A production-ready, 100% Python-based automation pipeline that monitors real-tim
   * **Database Tracking (`data/tweets.db`)**: SQLite tracking to ensure tweet IDs are never processed twice.
   * **Entity Keyword Clustering**: Merges similar stories reported by different outlets into a single high-engagement video.
   * **Semantic Memory (`data/topics.json`)**: 48-hour topic cache that prevents re-creating videos on similar themes.
-* **History & Documentary Support**: Accepts historical events, past incidents, and documentary content alongside breaking news.
-* **Source Attribution**: Automatically credits the original X author (`Source: @author on X`) in video descriptions.
-* **Multi-Provider LLM Orchestration**: Generates scripts using Gemini with fallbacks to Groq, OpenRouter, and Ollama.
-* **Voice & Audio Processing**: Uses local Piper TTS for natural narration, auto-synced silence gaps, and ducked Lo-Fi background music (`assets/bgm/`).
-* **Dynamic B-Roll & Subtitles**: Fetches matching HD B-Roll via Pexels/Unsplash and generates word-by-word highlighted subtitles via FFmpeg.
+* **Intelligent Visual Fetching & Auto-Fallback**:
+  * **DuckDuckGo HTML Lite Scraping**: Bypasses search engine rate limits to reliably extract high-quality publisher `og:image` hero images for news topics.
+  * Multi-source fallback priority (Tweet Media -> Scraped Article Images -> Wikipedia -> TMDB -> Bing -> DuckDuckGo -> AI-generated images).
+* **LLM Script Auto-Refinement**: Built-in quality evaluator that automatically detects script violations and actively refines output until it passes content guidelines.
+* **Voice & Audio Processing**: Uses local Piper TTS or Azure TTS for natural narration, auto-synced silence gaps, and ducked Lo-Fi background music (`assets/bgm/`).
+* **Dynamic B-Roll & Advanced Subtitles**: 
+  * Fetches matching HD B-Roll or generates AI images using Stability AI.
+  * Generates TikTok-style native `.ass` subtitles with animated word-by-word green background highlighting and exact positioning to clear YouTube Shorts UI.
 * **Programmatic Thumbnails**: Rips video frames and overlays bold script hooks for custom thumbnails.
 * **Self-Cleaning Storage**: Built-in Garbage Collector automatically purges temporary directory artifacts older than 48 hours.
 

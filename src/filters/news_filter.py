@@ -5,15 +5,25 @@ from datetime import datetime, timezone, timedelta
 from src.llm.providers import PROVIDERS
 
 
-# Keywords that indicate ads/promos
+# Keywords that indicate ads/promos/fluff
 SPAM_KEYWORDS = [
     "sponsored", "promoted", "ad ", "#ad", "giveaway",
     "win a ", "enter to win", "discount code", "use code",
     "affiliate", "click the link in bio",
+    # Trivial restaurant/cafe food menu fluff (zero news value)
+    "menu", "food menu", "restaurant menu", "cafe menu", "coffee menu",
+    "breakfast menu", "lunch menu", "dinner menu", "new menu",
 ]
 
+PAST_YEAR_RETRO_REGEX = re.compile(
+    r'\b(201[0-9]|202[0-5])\s+(kit|jersey|season|transfer|deal|move)\b|'
+    r'\b(in|back in|since|during)\s+(201[0-9]|202[0-5])\b|'
+    r'\b(throwback|on this day|years ago today|classic kit|vintage kit|old kit)\b',
+    re.IGNORECASE
+)
 
-def pre_filter(tweets, max_age_hours=168):
+
+def pre_filter(tweets, max_age_hours=24):
     """
     Removes low-quality and old tweets before the LLM filter.
 
@@ -21,14 +31,15 @@ def pre_filter(tweets, max_age_hours=168):
     - Replies (text starts with @)
     - Retweets/reposts (text starts with "RT @")
     - Very short tweets (< 30 characters)
-    - Old tweets (tweets posted older than max_age_hours timestamp, default 168h / 7 days)
+    - Old tweets (tweets posted older than max_age_hours timestamp, default 24h / 1 day)
     - Promotional/spam tweets
+    - Old retro/throwback kit posts & old transfer stories from past years (2010-2025)
 
     Note: Historical incidents and history content ARE allowed as long as the tweet itself is recent!
 
     Args:
         tweets: List of normalized tweet dicts.
-        max_age_hours: Maximum tweet posting age in hours (default: 168h / 7 days).
+        max_age_hours: Maximum tweet posting age in hours (default: 24h).
 
     Returns:
         Filtered list of tweet dicts.
@@ -36,7 +47,7 @@ def pre_filter(tweets, max_age_hours=168):
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=max_age_hours)
     result = []
-    stats = {"replies": 0, "retweets": 0, "short": 0, "old": 0, "spam": 0}
+    stats = {"replies": 0, "retweets": 0, "short": 0, "old": 0, "spam": 0, "retro": 0}
 
     for tweet in tweets:
         text = tweet.get("text", "").strip()
@@ -79,6 +90,11 @@ def pre_filter(tweets, max_age_hours=168):
             stats["spam"] += 1
             continue
 
+        # Skip retro/throwback kit posts and old transfer sagas from past years (2010-2025)
+        if PAST_YEAR_RETRO_REGEX.search(text_lower):
+            stats["retro"] += 1
+            continue
+
         result.append(tweet)
 
     total_removed = sum(stats.values())
@@ -86,7 +102,7 @@ def pre_filter(tweets, max_age_hours=168):
         logging.info(
             f"Pre-filter: removed {total_removed} tweets "
             f"(replies={stats['replies']}, RTs={stats['retweets']}, "
-            f"short={stats['short']}, old={stats['old']}, spam={stats['spam']}). "
+            f"short={stats['short']}, old={stats['old']}, spam={stats['spam']}, retro={stats['retro']}). "
             f"{len(result)} remain."
         )
     return result
@@ -141,19 +157,29 @@ def llm_news_filter(tweets):
     for tweet in tweets:
         prompt = f"""You are an experienced content editor for a YouTube Shorts channel (covering breaking news, history, technology, incidents, and viral events).
 
-Determine whether this tweet is suitable for creating a factual, engaging YouTube Short video.
+Determine whether this tweet is suitable for creating an engaging YouTube Short video. Faithfully evaluate the content as the tweet states without checking external/publicly available data.
 
 ACCEPT:
-- Breaking news, current events, sports updates, technology announcements
-- Fascinating historical events, historical incidents, documentaries, nature/science facts
+- Breaking news, viral posts, social media updates, sports news, tech updates, entertainment stories
 
 REJECT if it is any of:
+- Minor local US city/state politics, local county election polls, local US city council updates (e.g. local primary polls, local city board decisions). Focus on MAJOR international/world news!
+- Unverified social media rumors, fake death posts, fake Instagram comments, or celebrity gossip edits (e.g. "Ronaldo condolences to Messi on IG", fake death rumors)
+- Trivial fast food/restaurant menu updates, cafe food items, or coffee/dining announcements
+- Old retro kit/jersey discussions, throwback photos (e.g. "2014 Chelsea kit"), or past transfer sagas (e.g. old Lukaku transfers)
+- Nostalgia, "on this day" posts, or throwback photos that provide ZERO new information or value to the audience
+- Generic clickbait or zero-substance titles lacking specific named entities/events (e.g. "what happens when a surprise winner of a champ")
+- Old news or past sports/transfer stories from previous years (2010-2025). For sports/football news, the news MUST be current breaking news from TODAY (2026)
 - An advertisement or promotion
 - A personal opinion or hot take
 - A meme or joke
 - A reply to someone
 - A personal update or life event
-- Too vague to build a video around
+- Too vague or generic to build a factual video around
+
+CRITICAL AUDIENCE VALUE CHECK:
+Ask yourself: "What useful news, breaking update, or educational value does the audience gain from watching this video?"
+If the answer is NOTHING (just old nostalgia, useless kit photos, or outdated transfer chatter), YOU MUST REJECT IT (`accepted: false`).
 
 Tweet text: "{tweet['text']}"
 Author: @{tweet['author']}

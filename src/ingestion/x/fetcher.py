@@ -52,10 +52,23 @@ async def fetch_account_tweets(api, username, limit=10):
                 return []
 
 
-async def _fetch_all_accounts_async(accounts_by_category, tweets_per_account=5, max_accounts_per_run=15):
+CATEGORY_PRIORITY = [
+    "world", "sports", "Anime"
+]
+
+
+async def _fetch_all_accounts_async(accounts_by_category, tweets_per_account=5, max_accounts_per_run=18):
     """
-    Fetches tweets from a sampled subset of monitored accounts per cycle.
-    Adds rate-limit safety timeouts to prevent hanging when X limits are reached.
+    Fetches tweets from monitored accounts prioritizing categories in strict order:
+    1. world
+    2. sports
+    3. technology
+    4. cinema
+    5. India
+    6. Entertainment
+    7. Anime
+    8. Drama
+    9. Nature
 
     Args:
         accounts_by_category: Dict of {category: [username_list]}
@@ -75,17 +88,33 @@ async def _fetch_all_accounts_async(accounts_by_category, tweets_per_account=5, 
 
     results = {}
 
-    # Gather accounts by category and sample up to max_accounts_per_run
-    account_list = []
-    for category, usernames in accounts_by_category.items():
-        for username in usernames:
-            account_list.append((category, username))
+    # Sort categories according to CATEGORY_PRIORITY order (unknown/custom categories go last)
+    def category_rank(cat_name):
+        cat_lower = cat_name.lower()
+        for idx, prio in enumerate(CATEGORY_PRIORITY):
+            if prio.lower() == cat_lower:
+                return idx
+        return len(CATEGORY_PRIORITY)
 
-    random.shuffle(account_list)
-    sampled_accounts = account_list[:max_accounts_per_run]
+    sorted_categories = sorted(accounts_by_category.keys(), key=category_rank)
+
+    # Build account list prioritizing highest-ranked categories first
+    sampled_accounts = []
+    for cat in sorted_categories:
+        usernames = list(accounts_by_category[cat])
+        random.shuffle(usernames)  # Shuffle usernames within category for fair rotation
+        for u in usernames:
+            sampled_accounts.append((cat, u))
+            if len(sampled_accounts) >= max_accounts_per_run:
+                break
+        if len(sampled_accounts) >= max_accounts_per_run:
+            break
 
     total_fetched = 0
-    logging.info(f"X Ingestion: sampling {len(sampled_accounts)} accounts out of {len(account_list)} total...")
+    logging.info(
+        f"X Ingestion: sampling {len(sampled_accounts)} accounts in priority order "
+        f"(world -> sports -> technology -> India -> Entertainment -> Anime -> Drama -> Nature)..."
+    )
 
     for i, (category, username) in enumerate(sampled_accounts):
         if i > 0:

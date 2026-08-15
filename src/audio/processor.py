@@ -14,10 +14,10 @@ def process_audio(input_path, output_path, speed=1.1, silence_gap=0.3):
         output_path
     ]
     try:
-        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         return True
     except subprocess.CalledProcessError as e:
-        logging.error(f"Audio processing failed: {e.stderr.decode('utf-8', errors='ignore')}")
+        logging.error(f"Audio processing failed: {e.stderr[-500:] if e.stderr else 'Unknown error'}")
         return False
 
 def concat_audio(file_paths, output_path):
@@ -38,10 +38,10 @@ def concat_audio(file_paths, output_path):
     ]
     
     try:
-        subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         success = True
     except subprocess.CalledProcessError as e:
-        logging.error(f"Audio concatenation failed: {e.stderr.decode('utf-8', errors='ignore')}")
+        logging.error(f"Audio concatenation failed: {e.stderr[-500:] if e.stderr else 'Unknown error'}")
         success = False
     finally:
         if os.path.exists(list_path):

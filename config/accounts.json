@@ -1,32 +1,21 @@
 {
-    "technology": [
-        "techradar", "Gadgetsdata", "beebomco", "BenjDicken", "deepanshusharmx", "ReutersTech"
-    ],
-    "world": [
-        "rawsalerts", "disclosetv", "InsiderWire", "PolymarketSport", "Polymarket", "Kalshi_Finance", "Coinvo",
-        "JiangArchives", "historyinmemes", "BRICSinfo", "GlobeEyeNews", "stats_feed"
-    ],
+   
+    
     "sports": [
-        "FabrizioRomano", "Transfermarkt", "TheMatchdayHQ", "TEAMtalk", "GraemeBailey", "goal", "Plettigoal",
-        "footballontnt", "David_Ornstein"
+        "TheMatchdayHQ","FabrizioRomano",
+        "Plettigoal",
+        "David_Ornstein"
     ],
-    "cinema": [
-        "cineculture_x", "PrimeTopNews", "SolaceCinema", "CoveredGeekly", "ScreenBrief", "THR", "PopCrave",
-        "screenrant", "DEADLINE", "DCUBrief", "DiscussingFilm", "CultureCrave"
+    "world":[
+        "Coinvo","interesting_aIl","internetHOF","pubity"
     ],
-    "India": [
-        "ANI", "IndianGems_"
+    "India":[
+        "IndianGems_"
     ],
-    "Entertainment": [
-        "pubity", "interesting_aIl", "DramaAlert", "cleoabram", "Dexerto", "TheCinesthetic", "fasc1nate"
+    "Gaming":[
+        "Pirat_Nation"
     ],
-    "Nature": [
-        "giveashitnature", "Rainmaker1973", "Truthpole", "InternetHOF", "AMAZINGNATURE"
-    ],
-    "Anime": [
-        "SugoiLITE", "myanimelist", "todayanimenews", "AniNewsAndFacts"
-    ],
-    "Drama": [
-        "ForCdrama", "Allcbizmelons", "cdrama_mu", "My_Drama_List"
+    "Movie":[
+        "SceneinCinema"
     ]
 }

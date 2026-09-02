@@ -11,8 +11,10 @@ from src.llm.providers import PROVIDERS
 # ---------------------------------------------------------------------------
 CATEGORIES = [
     {
-        "name": "Top Trending Global News",
-        "description": "The absolute biggest, most viral breaking news stories happening in the world right now across all major subjects (World Events, Science, Major Tech, Pop Culture)."
+        "name": "Top Trending Drama News (CDrama/KDrama)",
+        "description": "The biggest breaking news in Asian Dramas right now — casting announcements, new trailer drops, ratings hits, and viral cast reunions for Chinese (CDrama) and Korean (KDrama) series.",
+        "reddit": "KDRAMA+CDrama+kpop",
+        "rss_query": "kdrama+cdrama+korean+drama+chinese+drama+when%3A1d",
     }
 ]
 
@@ -23,22 +25,10 @@ CATEGORIES = [
 # ---------------------------------------------------------------------------
 FALLBACK_CATEGORIES = [
     {
-        "name": "Top Trending Tech News",
-        "description": "The biggest breaking technology news right now — AI breakthroughs, major product launches, cybersecurity incidents, and viral tech moments.",
-        "reddit": "technology+artificial+MachineLearning+programming+gadgets",
-        "rss_query": "technology+AI+when%3A1d",
-    },
-    {
         "name": "Top Trending Football News",
         "description": "The hottest football (soccer) stories right now — transfer rumours, match results, manager drama, and viral moments from the world's biggest leagues.",
         "reddit": "soccer+football+PremierLeague+LaLiga+Champions_league",
         "rss_query": "football+soccer+transfer+when%3A1d",
-    },
-    {
-        "name": "Top Trending Movies & TV News",
-        "description": "The most talked-about movies and TV show news right now — trailers, box office records, casting shocks, and streaming releases everyone is discussing.",
-        "reddit": "movies+television+boxoffice+NetflixBestOf+marvelstudios",
-        "rss_query": "movies+trailer+TV+streaming+when%3A1d",
     },
     {
         "name": "Top Trending Anime News",
@@ -46,6 +36,18 @@ FALLBACK_CATEGORIES = [
         "reddit": "anime+manga+OnePiece+Naruto+attackontitan",
         "rss_query": "anime+manga+season+announcement+when%3A1d",
     },
+    {
+        "name": "Top Trending Tech News",
+        "description": "The biggest breaking technology news right now — AI breakthroughs, major product launches, cybersecurity incidents, and viral tech moments.",
+        "reddit": "technology+artificial+MachineLearning+programming+gadgets",
+        "rss_query": "technology+AI+when%3A1d",
+    },
+    {
+        "name": "Top Trending Global News",
+        "description": "The absolute biggest, most viral breaking news stories happening in the world right now across all major subjects (World Events, Science, Major Tech, Pop Culture).",
+        "reddit": "worldnews+news+TrueReddit",
+        "rss_query": "world+news+when%3A1d"
+    }
 ]
 
 
@@ -93,7 +95,7 @@ def fetch_real_time_news():
     url = f"https://www.reddit.com/r/{subreddits}/top.json?t=day&limit=15"
     headlines = []
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) YTAutomationBot/1.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
@@ -114,7 +116,7 @@ def _fetch_reddit_headlines(subreddits, limit=15):
     """Fetches top-of-day headlines from the given combined subreddit string."""
     url = f"https://www.reddit.com/r/{subreddits}/top.json?t=day&limit={limit}"
     try:
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) YTAutomationBot/1.0'}
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=15)
         response.raise_for_status()
         data = response.json()
@@ -166,6 +168,7 @@ You MUST NOT generate any topic that covers the same event, person, or semantic 
 You MUST ONLY select massive real stories from exactly TODAY based explicitly on those real headlines above. DO NOT invent fictional events. DO NOT use old news from past months or years.
 
 Generate 3 highly engaging, distinct, and currently trending REAL topics:
+- Each topic must be a concise headline, STRICTLY between 3 to 12 words. Do not exceed 12 words!
 Category: {category['name']}
 Focus guidelines: {category['description']}
 
@@ -186,13 +189,29 @@ def _try_generate_topics(category, live_headlines, avoid_context, today):
     for provider_name, provider_func in PROVIDERS:
         try:
             raw = provider_func(prompt).strip()
-            if raw.startswith("```json"):
-                raw = raw[7:]
-            if raw.endswith("```"):
-                raw = raw[:-3]
             raw = raw.strip()
-
-            topics = json.loads(raw)
+            
+            # Robust JSON array extraction using bracket counting
+            topics = None
+            start_idx = raw.find('[')
+            if start_idx != -1:
+                bracket_count = 0
+                for i in range(start_idx, len(raw)):
+                    if raw[i] == '[':
+                        bracket_count += 1
+                    elif raw[i] == ']':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            potential_json = raw[start_idx:i+1]
+                            try:
+                                import json
+                                topics = json.loads(potential_json)
+                                break
+                            except Exception:
+                                pass
+            
+            if topics is None:
+                raise ValueError(f"No valid JSON array found in LLM response: {raw[:100]}...")
             if isinstance(topics, list) and len(topics) >= 1:
                 # Guard: LLM sometimes wraps the array in another list, e.g. [["t1", "t2"]]
                 if len(topics) == 1 and isinstance(topics[0], list):
@@ -316,7 +335,7 @@ Convert each tweet into a clean, engaging topic title suitable for a YouTube Sho
 Rules:
 - Give TOP PRIORITY to items tagged as [TRENDING - Reported by N accounts]
 - GLOBAL NEWS RULE: Prioritize major international world news, global events, worldwide sports, tech, and entertainment. DO NOT generate topics about minor local US city/state politics (e.g. local primary polls, local state legislation, small US city council updates).
-- Each topic must be a concise, factual headline (3-8 words)
+- Each topic must be a concise, factual headline STRICTLY between 3 to 12 words. Do not exceed 12 words!
 - Do NOT copy the tweet text verbatim — rephrase into a clean title
 - Do NOT include author names, @mentions, hashtags, or URLs
 - Do NOT invent new information — only use what's in the tweets
@@ -328,7 +347,7 @@ Example: ["OpenAI Releases GPT-6", "Apple Unveils M5 Chips"]
 
 
 CATEGORY_PRIORITY = [
-    "world", "sports", "Anime"
+    "sports", "world", "India", "Tech", "Movie", "Anime", "Cdrama", "Kdrama"
 ]
 
 
@@ -340,7 +359,7 @@ def _get_category_rank(cat_name):
     return len(CATEGORY_PRIORITY)
 
 
-def generate_topics_from_tweets(filtered_tweets):
+def generate_topics_from_tweets(filtered_tweets, target_category=None):
     """
     Converts filtered tweet dicts into clean topic titles using the LLM.
     Prioritizes multi-account trending stories first, then category priority rank.
@@ -353,6 +372,11 @@ def generate_topics_from_tweets(filtered_tweets):
     """
     if not filtered_tweets:
         return "Unknown", []
+        
+    if target_category:
+        filtered_tweets = [t for t in filtered_tweets if t.get("category", "").lower() == target_category.lower()]
+        if not filtered_tweets:
+            return "Unknown", []
 
     # Sort tweets: Multi-account trending stories FIRST (-story_count), then category priority rank, then importance
     sorted_tweets = sorted(
@@ -363,7 +387,7 @@ def generate_topics_from_tweets(filtered_tweets):
             -t.get("importance", 5),
             -(t.get("likes", 0) + t.get("retweets", 0))
         )
-    )
+    )[:5]
 
     today = datetime.datetime.now().strftime("%B %d, %Y")
     recent_topics = get_recent_topics()
@@ -377,13 +401,28 @@ def generate_topics_from_tweets(filtered_tweets):
     for provider_name, provider_func in PROVIDERS:
         try:
             raw = provider_func(prompt).strip()
-            if raw.startswith("```json"):
-                raw = raw[7:]
-            if raw.endswith("```"):
-                raw = raw[:-3]
-            raw = raw.strip()
-
-            topics = json.loads(raw)
+            # Robust JSON array extraction using bracket counting
+            topics = None
+            start_idx = raw.find('[')
+            if start_idx != -1:
+                bracket_count = 0
+                for i in range(start_idx, len(raw)):
+                    if raw[i] == '[':
+                        bracket_count += 1
+                    elif raw[i] == ']':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            potential_json = raw[start_idx:i+1]
+                            try:
+                                import json
+                                topics = json.loads(potential_json)
+                                break
+                            except Exception:
+                                pass
+            
+            if topics is None:
+                raise ValueError(f"No valid JSON array found in LLM response: {raw[:100]}...")
+                
             if isinstance(topics, list) and len(topics) >= 1:
                 if len(topics) == 1 and isinstance(topics[0], list):
                     topics = topics[0]

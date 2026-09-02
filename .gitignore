@@ -10,7 +10,9 @@ output/
 logs/
 data/
 assets/
-scripts/
+
+# Playwright authentication state
+data/x/playwright_state.json
 
 # Databases
 *.db
@@ -38,3 +40,6 @@ __pycache__/
 Thumbs.db
 token.json
 client_secret.json
+config/channels/*/token.json
+config/channels/*/client_secret.json
+config/playlist_cache.json

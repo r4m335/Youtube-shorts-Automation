@@ -11,10 +11,10 @@ from src.ingestion import get_topics
 from src.llm import generate_script_for_topic
 from src.audio.tts import generate_line_audio
 from src.audio.processor import process_audio, concat_audio
-from src.visuals.fetcher import get_visual_for_line, extract_keyword, discover_articles, scrape_article_images
+from src.visuals.fetcher import get_visual_for_line, extract_keyword, discover_articles, scrape_article_images, fetch_topic_context
 from src.visuals import generate_ass, get_audio_duration
 from src.render.engine import create_video_segment, concat_video_segments, mix_final_video, generate_thumbnail
-from src.upload import generate_metadata, upload_video
+from src.upload import generate_metadata, upload_video, add_to_playlist, get_all_channels
 
 load_dotenv()
 
@@ -80,8 +80,11 @@ def process_single_topic(topic, category, tweet_media_urls=None):
     from src.audio.tts import reset_session_voice
     reset_session_voice()
     
+    # 0.5 Fetch RAG Context to prevent hallucinations
+    topic_context = fetch_topic_context(topic)
+
     # 1. Script Generation
-    lines, topic_hash = generate_script_for_topic(topic)
+    lines, topic_hash = generate_script_for_topic(topic, context=topic_context)
     if not lines:
         logging.error("Pipeline aborted: Script generation failed.")
         return False
@@ -97,7 +100,7 @@ def process_single_topic(topic, category, tweet_media_urls=None):
         logging.warning(f"Initial script REJECTED for topic '{topic}': {reason}")
         logging.info("Attempting auto-refinement to fix feedback issues...")
         
-        refined_lines = refine_script_with_feedback(topic, lines, reason)
+        refined_lines = refine_script_with_feedback(topic, lines, reason, context=topic_context)
         if refined_lines:
             is_good_2, reason_2 = evaluate_script_quality(topic, refined_lines)
             if is_good_2:
@@ -135,7 +138,9 @@ def process_single_topic(topic, category, tweet_media_urls=None):
             llm_urls = discover_articles(topic, limit=3)
             if llm_urls:
                 article_image_pool.extend(scrape_article_images(llm_urls, temp_dir))
+                
         
+
         for i, line in enumerate(lines):
             logging.info(f"Processing line {i+1}/{len(lines)}...")
             raw_audio = os.path.join(temp_dir, f"raw_{i}.wav")
@@ -149,7 +154,14 @@ def process_single_topic(topic, category, tweet_media_urls=None):
             # Visual — use tweet media for first line if available
             line_media = tweet_media_urls if (i == 0 and tweet_media_urls) else None
             
-            art_img = article_image_pool[i % len(article_image_pool)] if article_image_pool else None
+            art_img = None
+            # 1. Try to use a unique article image first
+            if i < len(article_image_pool):
+                art_img = article_image_pool[i]
+            # 2. If pool is exhausted, loop the article pool
+            elif article_image_pool:
+                art_img = article_image_pool[i % len(article_image_pool)]
+                    
             visual_path = get_visual_for_line(line, temp_dir, i, topic=topic, tweet_media_urls=line_media, category=category, article_image=art_img)
             if not visual_path:
                 logging.error("Failed to fetch visual. Aborting topic.")
@@ -197,7 +209,11 @@ def process_single_topic(topic, category, tweet_media_urls=None):
         
         # 8. Upload
         title, desc, tags = generate_metadata(topic, lines[0], script_lines=lines)
-        upload_video(final_mp4, title, desc, tags, thumbnail_path=thumb_path)
+        video_id = upload_video(final_mp4, title, desc, tags, category=category, thumbnail_path=thumb_path)
+        
+        # 9. Add to category playlist
+        if video_id:
+            add_to_playlist(video_id, category)
         
         logging.info(f"--- Pipeline complete for topic: '{topic}' ---")
         return True
@@ -218,86 +234,173 @@ def main():
     logging.info(f"Cycle interval: {SCHEDULER_INTERVAL // 60} minutes")
     logging.info("=" * 60)
 
+    logging.info("Checking for twscrape updates...")
+    try:
+        import subprocess
+        subprocess.run(["pip", "install", "--upgrade", "twscrape"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        logging.warning(f"Failed to check for scraper updates: {e}")
+
     run_garbage_collection(hours_old=1)
 
-    # Initialize tweet database
+    # Initialize tweet database and reset stuck states
     try:
-        from src.storage.database import init_db, cleanup_old
+        from src.storage.database import init_db, cleanup_old, reset_stale_processing_tweets
         init_db()
+        cleanup_old(days=7)
+        reset_stale_processing_tweets()
     except ImportError:
         pass
 
-    cycle_count = 0
+    global_success_count = 0
+    first_run = True
 
     while True:
-        cycle_count += 1
         cycle_start = time.time()
-        logging.info(f"--- Scheduler Cycle #{cycle_count} starting ---")
-
-        total_success = 0
-        total_attempted = 0
-
+        
+        # ---------------------------------------------------------
+        # PHASE 1: INGESTION
+        # ---------------------------------------------------------
         try:
-            # Clean old tweet DB entries periodically
-            try:
-                from src.storage.database import cleanup_old
-                cleanup_old(days=7)
-            except ImportError:
-                pass
-
-            logging.info("Fetching topics...")
-            category, topics, source_tweets = get_topics()
+            from src.storage.database import get_backlog_stats
+            from src.ingestion.x.account_manager import load_accounts
             
-            # Collect all media URLs from source tweets for visual use
-            all_tweet_media = []
-            for tw in source_tweets:
-                all_tweet_media.extend(tw.get("media", []))
+            stats = get_backlog_stats() or {}
+            accounts = load_accounts()
+            active_categories = list(accounts.keys()) if accounts else []
+            
+            from src.ingestion.scraper_job import run_ingestion_phase
 
-            if not topics:
-                logging.info(
-                    f"No new topics found. Sleeping {SCHEDULER_INTERVAL // 60} minutes..."
-                )
-                time.sleep(SCHEDULER_INTERVAL)
-                continue
+            if first_run:
+                logging.info("Initial startup: Scraping all categories to refresh backlog.")
+                run_ingestion_phase(target_category=None)
+                first_run = False
+            else:
+                # Find categories that are empty
+                empty_cats = [cat for cat in active_categories if stats.get(cat, 0) == 0]
+                
+                if empty_cats:
+                    logging.info(f"Smart Scrape: Categories {empty_cats} have 0 pending tweets. Scraping only these.")
+                    for cat in empty_cats:
+                        run_ingestion_phase(target_category=cat)
+                else:
+                    logging.info("Skipping Phase 1 Ingestion: Backlog has pending tweets for all active categories.")
+        except Exception as e:
+            import traceback
+            logging.error(f"Phase 1 Ingestion failed: {e}\n{traceback.format_exc()}")
+            
+        # Verify and Print DB Stats
+        try:
+            from src.storage.database import get_backlog_stats
+            stats = get_backlog_stats()
+            logging.info("--- DATABASE BACKLOG STATS ---")
+            if not stats:
+                logging.info("tweets.db is completely empty (no pending tweets).")
+            else:
+                logging.info("tweets.db")
+                for cat, count in stats.items():
+                    logging.info(f"├── {cat:<12} {count} pending")
+            logging.info("------------------------------")
+        except Exception as e:
+            pass
 
-            # Strip invisible Unicode characters
-            topics = [
-                t.replace('\u200b', '').replace('\u200c', '')
-                 .replace('\u200d', '').replace('\ufeff', '')
-                for t in topics
-            ]
-
-            logging.info(f"Got {len(topics)} new topic(s) from '{category}'. Processing...")
-
-            for topic in topics:
-                if total_success >= 5:
-                    logging.info("Reached maximum of 5 successful videos for this run.")
-                    break
+        # ---------------------------------------------------------
+        # PHASE 2: VIDEO GENERATION (per-channel, 8 videos each)
+        # ---------------------------------------------------------
+        VIDEOS_PER_CHANNEL = 8
+        channels = get_all_channels()
+        total_target = len(channels) * VIDEOS_PER_CHANNEL
+        
+        logging.info(f"PHASE 2: Starting Video Generation — {len(channels)} channels × {VIDEOS_PER_CHANNEL} videos = {total_target} target")
+        
+        try:
+            from src.storage.database import get_pending_tweet_for_category, mark_tweet_status
+            from src.ingestion.orchestrator import generate_topics_from_tweets
+            from src.ingestion.filter import filter_and_cache_topics, remove_from_cache
+            
+            for channel_name, channel_cfg in channels.items():
+                channel_categories = channel_cfg.get("categories", [])
+                channel_success = 0
+                
+                logging.info(f"=== Channel '{channel_name}' — categories: {channel_categories} ===")
+                
+                # Round-robin through this channel's categories until 8 videos
+                max_passes = VIDEOS_PER_CHANNEL  # safety limit to avoid infinite loop
+                for pass_num in range(max_passes):
+                    if channel_success >= VIDEOS_PER_CHANNEL:
+                        break
                     
-                total_attempted += 1
-                try:
-                    if process_single_topic(topic, category, tweet_media_urls=all_tweet_media or None):
-                        total_success += 1
-                        with open("logs/success.log", "a", encoding="utf-8") as f:
-                            f.write(f"{time.time()},{category},{topic}\n")
-                except Exception as e:
-                    import traceback
-                    logging.error(f"Top level error processing topic '{topic}': {e}\n{traceback.format_exc()}")
-                    with open("logs/error.log", "a", encoding="utf-8") as f:
-                        f.write(f"{time.time()},{topic},{str(e)}\n")
+                    all_skipped = True  # track if all categories had no tweets
+                    
+                    for category in channel_categories:
+                        if channel_success >= VIDEOS_PER_CHANNEL:
+                            break
+                        
+                        logging.info(f"[{channel_name}] Pass {pass_num+1}, checking '{category}' ({channel_success}/{VIDEOS_PER_CHANNEL})...")
+                        
+                        tweet = get_pending_tweet_for_category(category)
+                        if not tweet:
+                            logging.info(f"No pending tweets for '{category}'. Skipping.")
+                            continue
+                        
+                        all_skipped = False
+                        logging.info(f"Found pending tweet for '{category}': {tweet['text'][:50]}...")
+                        
+                        try:
+                            _, topics = generate_topics_from_tweets([tweet], target_category=category)
+                            
+                            if not topics:
+                                logging.warning(f"LLM failed to generate a topic for tweet {tweet['tweet_id']}. Marking as failed.")
+                                mark_tweet_status(tweet["tweet_id"], "failed")
+                                continue
+                            
+                            valid_topics = filter_and_cache_topics(topics, source="database")
+                            if not valid_topics:
+                                logging.info("Topic generated was a duplicate in cache. Marking as failed.")
+                                mark_tweet_status(tweet["tweet_id"], "failed")
+                                continue
+                            
+                            topic = valid_topics[0]
+                            logging.info(f"Generating video for topic: '{topic}'")
+                            best_tweet_media = None
+                            
+                            if process_single_topic(topic, category, tweet_media_urls=best_tweet_media):
+                                channel_success += 1
+                                global_success_count += 1
+                                with open("logs/success.log", "a", encoding="utf-8") as f:
+                                    f.write(f"{time.time()},{category},{topic}\n")
+                                mark_tweet_status(tweet["tweet_id"], "completed", topic=topic, youtube_id="generated")
+                                logging.info(f"[{channel_name}] '{category}' video done ({channel_success}/{VIDEOS_PER_CHANNEL}, total {global_success_count}/{total_target})")
+                            else:
+                                remove_from_cache(topic)
+                                logging.warning(f"Failed to generate video for '{topic}'. Marking tweet as failed.")
+                                mark_tweet_status(tweet["tweet_id"], "failed")
+                        
+                        except Exception as e:
+                            import traceback
+                            logging.error(f"Error processing '{category}': {e}\n{traceback.format_exc()}")
+                            mark_tweet_status(tweet["tweet_id"], "failed")
+                        
+                        logging.info(f"Sleeping 15s before next topic...")
+                        time.sleep(15)
+                    
+                    # If all categories had no tweets this pass, stop early
+                    if all_skipped:
+                        logging.info(f"[{channel_name}] All categories exhausted. Moving to next channel.")
+                        break
+                
+                logging.info(f"=== Channel '{channel_name}' complete: {channel_success}/{VIDEOS_PER_CHANNEL} videos ===")
+            
+            logging.info(f"All channels processed. Total videos: {global_success_count}/{total_target}")
 
         except KeyboardInterrupt:
             logging.info("Scheduler interrupted by user. Shutting down.")
             break
         except Exception as e:
-            logging.error(f"Scheduler cycle #{cycle_count} failed: {e}")
+            logging.error(f"Phase 2 failed: {e}")
 
         elapsed = time.time() - cycle_start
-        logging.info(
-            f"--- Cycle #{cycle_count} complete: "
-            f"{total_success}/{total_attempted} succeeded in {elapsed:.1f}s. "
-            f"Sleeping {SCHEDULER_INTERVAL // 60} minutes... ---"
-        )
+        logging.info(f"--- Cycle complete in {elapsed:.1f}s. Sleeping {SCHEDULER_INTERVAL // 60} minutes... ---")
         time.sleep(SCHEDULER_INTERVAL)
 
 if __name__ == "__main__":

@@ -1,0 +1,7 @@
+You ever think a chatbot could spread a lie? Let’s break down AI, fake news, and Russia.
+In September 2023, researchers found DCWeekly.org, a fake site, suddenly stopped copying Fox News stories.
+Instead, it started publishing original content that served as a cover for Russian propaganda operations.
+When scientists asked AI models about Russian topics, one-third of the answers echoed false claims.
+Because AI writes in an authoritative tone, people mistake these lies for trustworthy facts.
+This tech‑driven misinformation reshapes democracy, fuels geopolitical conflict, and leaves us all in doubt.
+Want to see the AI’s own lie? Hit like, share, and let’s expose the truth together!

@@ -1,0 +1,8 @@
+Unlock the hidden power in your tweets: perfect quote formatting in seconds.
+To add quotes use standard double quotes  or curly quotes “ and ”.
+Use single space after and before the quotes for optimal readability.
+For block quotes use triple greater-than and triple less-than symbols >>> or <<<.
+Footnotes on Twitter are handled with simple hashtags, e.g. #fn1.
+Numbered footnotes can be denoted with superscript numbers, e.g. ¹.
+Use Markdown syntax to customize font style for better readability.
+Experiment with unique quote styles and footnotes to elevate your tweets.

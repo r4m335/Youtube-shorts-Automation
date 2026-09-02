@@ -41,7 +41,7 @@ def is_valid_topic(topic):
         return False, "Too short/vague"
         
     # 2. Reject excessively long topics (might be full questions or stories)
-    if len(words) > 10:
+    if len(words) > 15:
         return False, "Too long, likely not a clean named entity"
         
     # 3. Reject high-risk/political
@@ -146,7 +146,18 @@ def filter_and_cache_topics(raw_topics, source="unknown"):
                 "source": source
             }
         else:
-            logging.debug(f"Rejected topic '{topic[:30]}...': {reason}")
+            logging.info(f"Rejected topic '{topic[:30]}...': {reason}")
             
     save_topics_cache(cache)
     return new_valid_topics
+
+def remove_from_cache(topic):
+    """
+    Removes a topic from the cache if video generation failed,
+    allowing it to be retried in the future.
+    """
+    cache = load_topics_cache()
+    if topic in cache:
+        del cache[topic]
+        save_topics_cache(cache)
+        logging.info(f"Removed '{topic}' from cache due to generation failure.")

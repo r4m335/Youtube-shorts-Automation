@@ -1,0 +1,8 @@
+What if your microSD card could survive 133 petabytes? Let me break the numbers down.
+Matt Cole's 3‑year marathon tested 351 cards, writing 133 PB of data.
+A total of 4.6 million program‑verify‑erase cycles hit every chip.
+Out of 351, 177 went rogue – read‑only, corrupted, or just straight up failed.
+SanDisk led the pack, 6 of 7 cards broke early, proving it’s the outlier.
+That’s like wiping a library’s worth of books every single time you write.
+If your backup lives on a microSD, it might be running out of time.
+Hit like, drop a comment, and let’s geek out over endurance data!

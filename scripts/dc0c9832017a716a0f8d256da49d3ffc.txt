@@ -1,0 +1,6 @@
+The World Wide Web is on life support, a 35-year-old patient fighting for breath
+The Internet's backbone was built on fragile protocols, vulnerable to collapse
+In the 1980s, computer scientist Vint Cerf designed the Transmission Control Protocol
+TCP ensures data packets are delivered correctly but doesn't guarantee delivery speed or order
+As users worldwide increase, network congestion and bottlenecks begin to form
+Can we upgrade the web before it's too late and the whole system crashes?

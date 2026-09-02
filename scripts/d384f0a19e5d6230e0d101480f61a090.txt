@@ -1,0 +1,7 @@
+Imagine a computer 1 trillion times faster than your laptop, but it won't arrive until 2033
+Quantum computing has been touted as the game-changer since the 1990s
+Scientists have made significant progress in quantum algorithms and hardware
+These breakthroughs will bring us closer to solving complex problems like climate modeling
+However, despite the hype, large-scale practical applications remain on the horizon
+Companies like Google and IBM are investing heavily in quantum computing research
+But the question still stands: Will quantum computing be worth the 5-year lag between promise and reality?

@@ -1,0 +1,7 @@
+Microsoft's shocking AI pivot - a move that's got tech fans freaking out worldwide.
+Microsoft drops support for Open Neural Network Exchange (ONNX), a AI collaboration tool.
+ONNX helped developers create and share AI models across platforms.
+But now, Microsoft's AI ecosystem looks less interoperable with others.
+Critics say this decision will stifle AI innovation and limit open standards.
+Industry experts predict a potential shift towards closed AI ecosystems.
+The future of AI development just got a lot more complex - what's next?

@@ -1,0 +1,7 @@
+Whoa, an unofficial DLSS 5 patch is rocking RTX 30‑series cards—performance might drop to one frame!
+Nvidia hasn't released DLSS 5 yet, but modders have cracked its library into ampere GPUs.
+Tests show it can hurt FPS by a few points—or even hit single‑digit frame rates.
+The patch isn't officially supported, so expect bugs and unpredictable results.
+Game modders say it works on older RTX 40 and RTX 30 cards, but the numbers are shaky.
+If you’re still rocking a 30‑series, this patch is a gamble with terrible performance.
+Want to stay ahead? Hit like and comment if you’d try the risky DLSS 5 experiment!

@@ -1,21 +1,30 @@
 {
-   
-    
-    "sports": [
-        "TheMatchdayHQ","FabrizioRomano",
-        "Plettigoal",
-        "David_Ornstein"
+    "Movie": [
+        "DiscussingFilm"
     ],
-    "world":[
-        "Coinvo","interesting_aIl","internetHOF","pubity"
+    "sports": [
+        "David_Ornstein",
+        "FabrizioRomano"
+    ],
+    "Cdrama": [
+        "ForCdrama"
+    ],
+    "world": [
+        "interesting_aIl",
+        "pubity",
+        "InternetH0F"
+    ],
+    "Kdrama": [
+        "KoreanUpdates"
+    ],
+    "Tech": [
+        "Pirat_Nation"
+    ],
+    "Anime": [
+        "animeupdates"
     ],
     "India":[
         "IndianGems_"
-    ],
-    "Gaming":[
-        "Pirat_Nation"
-    ],
-    "Movie":[
-        "SceneinCinema"
     ]
+
 }

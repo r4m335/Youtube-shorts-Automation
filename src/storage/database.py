@@ -2,6 +2,7 @@ import os
 import sqlite3
 import time
 import logging
+import re
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "tweets.db")
 
@@ -32,6 +33,19 @@ def init_db():
                 inserted_at REAL
             )
         """)
+        
+        # Migration: Add status column if it doesn't exist
+        cursor = conn.execute("PRAGMA table_info(tweets)")
+        columns = [info["name"] for info in cursor.fetchall()]
+        if "status" not in columns:
+            conn.execute("ALTER TABLE tweets ADD COLUMN status TEXT DEFAULT 'pending'")
+            # Migrate old processed states
+            conn.execute("UPDATE tweets SET status = 'completed' WHERE processed = 1")
+            conn.execute("UPDATE tweets SET status = 'pending' WHERE processed = 0")
+            
+        if "story_count" not in columns:
+            conn.execute("ALTER TABLE tweets ADD COLUMN story_count INTEGER DEFAULT 1")
+        
         conn.commit()
         logging.info("Tweet database initialized.")
     finally:
@@ -46,6 +60,34 @@ def is_processed(tweet_id):
             "SELECT 1 FROM tweets WHERE tweet_id = ?", (str(tweet_id),)
         ).fetchone()
         return row is not None
+    finally:
+        conn.close()
+
+
+def clean_text_for_dup_check(text):
+    """Removes URLs and punctuation for accurate duplicate text comparison."""
+    if not text: return ""
+    text = re.sub(r'http\S+', '', text)
+    text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
+    return text.lower().strip()
+
+
+def is_text_processed(author, text):
+    """Returns True if the author has already tweeted very similar text."""
+    conn = _get_connection()
+    try:
+        rows = conn.execute("SELECT text FROM tweets WHERE author = ?", (author,)).fetchall()
+        clean_target = clean_text_for_dup_check(text)
+        if not clean_target:
+            return False
+            
+        for row in rows:
+            db_text = clean_text_for_dup_check(row["text"])
+            if not db_text: continue
+            # Check for exact match or strong substring match
+            if clean_target == db_text or (len(db_text) > 20 and db_text in clean_target) or (len(clean_target) > 20 and clean_target in db_text):
+                return True
+        return False
     finally:
         conn.close()
 
@@ -78,27 +120,83 @@ def insert_tweet(tweet_dict):
         conn.close()
 
 
-def mark_processed(tweet_id, topic="", youtube_id=None):
-    """Marks a tweet as processed after the video pipeline completes."""
+def mark_tweet_status(tweet_id, status, topic="", youtube_id=None):
+    """Marks a tweet as completed or failed."""
     conn = _get_connection()
     try:
         conn.execute(
             """
             UPDATE tweets
-            SET processed = 1,
-                video_generated = ?,
+            SET status = ?,
                 topic = ?,
-                youtube_id = ?
+                youtube_id = ?,
+                processed = ?,
+                video_generated = ?
             WHERE tweet_id = ?
             """,
             (
-                1 if youtube_id else 0,
+                status,
                 topic,
                 youtube_id,
+                1 if status == 'completed' else 0,
+                1 if youtube_id else 0,
                 str(tweet_id),
             ),
         )
         conn.commit()
+    finally:
+        conn.close()
+
+def reset_stale_processing_tweets():
+    """Resets any stuck 'processing' tweets back to 'pending' on startup."""
+    conn = _get_connection()
+    try:
+        conn.execute("UPDATE tweets SET status = 'pending' WHERE status = 'processing'")
+        conn.commit()
+        if conn.total_changes > 0:
+            logging.info(f"Reset {conn.total_changes} stale processing tweets back to pending.")
+    finally:
+        conn.close()
+
+def get_pending_tweet_for_category(category):
+    """Atomically gets the oldest pending tweet for a category and marks it processing."""
+    conn = _get_connection()
+    try:
+        row = conn.execute(
+            """
+            SELECT tweet_id, text, author, created_at, category, story_count FROM tweets 
+            WHERE category = ? AND status = 'pending'
+            ORDER BY story_count DESC, inserted_at DESC LIMIT 1
+            """, 
+            (category,)
+        ).fetchone()
+        
+        if row:
+            conn.execute("UPDATE tweets SET status = 'processing' WHERE tweet_id = ?", (row["tweet_id"],))
+            conn.commit()
+            return dict(row)
+        return None
+    finally:
+        conn.close()
+
+def update_tweet_dedup(tweet_id, new_text, story_count):
+    """Updates the text and story_count of a tweet after deduplication aggregation."""
+    conn = _get_connection()
+    try:
+        conn.execute(
+            "UPDATE tweets SET text = ?, story_count = ? WHERE tweet_id = ?",
+            (new_text, story_count, str(tweet_id))
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+def get_backlog_stats():
+    """Returns a dictionary of category -> count of pending tweets."""
+    conn = _get_connection()
+    try:
+        rows = conn.execute("SELECT category, COUNT(*) as count FROM tweets WHERE status = 'pending' GROUP BY category").fetchall()
+        return {r["category"]: r["count"] for r in rows}
     finally:
         conn.close()
 

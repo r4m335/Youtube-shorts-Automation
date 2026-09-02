@@ -1,0 +1,7 @@
+BOMBSHELL: Microsoft Edge leaks passwords as plaintext
+In a shocking revelation, researchers expose major flaw
+Millions of users at risk of catastrophic breach
+Edge browser's password storage leaves users vulnerable
+Plaintext passwords stored in volatile memory, waiting
+to be exploited by hackers seeking easy targets.
+You might think your passwords are safe, but are they?

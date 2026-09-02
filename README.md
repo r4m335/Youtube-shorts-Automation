@@ -8,6 +8,7 @@ A production-ready, 100% Python-based automation pipeline that monitors real-tim
 
 * **Real-Time X (Twitter) Monitoring (`twscrape`)**: Monitors curated X accounts across multiple niches (**Technology, World News, Sports, Cinema, India, Entertainment, Nature, Anime, Drama**) without X API fees.
 * **5-Minute Continuous Scheduler**: Continuous monitoring loop with automated rate-limiting, account sampling, and failure recovery.
+* **Multi-Channel Auto-Routing**: Dynamically routes video uploads to completely separate YouTube channels based on the topic's category using isolated per-channel OAuth tokens. Automatically creates and manages category-specific playlists (e.g., "Movie News", "Tech News") on each channel.
 * **3-Layer Deduplication Engine**:
   * **Database Tracking (`data/tweets.db`)**: SQLite tracking to ensure tweet IDs are never processed twice.
   * **Entity Keyword Clustering**: Merges similar stories reported by different outlets into a single high-engagement video.
@@ -64,7 +65,18 @@ X_EMAIL_PASSWORD=your_x_email_password
 X_COOKIES=auth_token=YOUR_AUTH_TOKEN; ct0=YOUR_CT0
 ```
 
-2. Drop your YouTube API `client_secret.json` into the root directory for upload authentication.
+2. **Multi-Channel Configuration**: 
+   The pipeline routes uploads to specific channels based on category. This is configured in `config/channels.json`. For each channel, you must provide a unique OAuth 2.0 Client ID (type: **Desktop app**) placed in its respective directory:
+   ```
+   config/channels/
+   ├── entertainment/
+   │   ├── client_secret.json  <-- Place your Google Cloud Desktop app credentials here
+   ├── tech_sports/
+   │   ├── client_secret.json
+   └── world_news/
+       ├── client_secret.json
+   ```
+   *Note: The pipeline will prompt you to authenticate via your browser on the very first upload for each channel. The resulting `token.json` will be saved next to the client secret.*
 
 ---
 

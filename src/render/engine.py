@@ -60,9 +60,12 @@ def create_video_segment(visual_data, duration, output_path, fps=30, is_hook=Fal
         zoom_speed = "0.002" if is_hook else "0.001"
         max_zoom = "1.15" if is_hook else "1.12"
         
+        img_loop_flag = "-stream_loop" if img_path.lower().endswith('.mp4') else "-loop"
+        img_loop_val = "-1" if img_path.lower().endswith('.mp4') else "1"
+        
         command = [
             "ffmpeg", "-y",
-            "-loop", "1", "-i", img_path,
+            img_loop_flag, img_loop_val, "-i", img_path,
             "-stream_loop", "-1", "-i", vid_path,
             "-t", str(duration),
             "-filter_complex",

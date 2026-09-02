@@ -8,8 +8,7 @@ import random
 # Voice pool — randomly picks one per video for variety
 # --------------------------------------------------------------------------- #
 TTS_VOICES = [
-    "en-US-JennyNeural",    # Storytelling, facts, general YouTube
-    "en-US-AndrewNeural",   # Documentary, educational, technology
+    "en-US-GuyNeural",          # Confident, urgent news presenter
 ]
 
 # Pick one voice per session (consistent within a single video)
@@ -30,10 +29,11 @@ def reset_session_voice():
 # --------------------------------------------------------------------------- #
 # Edge TTS (Primary — natural-sounding Microsoft Azure voices, FREE)
 # --------------------------------------------------------------------------- #
-async def _edge_tts_async(text, output_path, voice="en-US-JennyNeural"):
+async def _edge_tts_async(text, output_path, voice="en-US-GuyNeural"):
     """Generate TTS using Edge TTS (Microsoft Azure voices via edge-tts package)."""
     import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
+    # Add +15% rate and +2Hz pitch to transform the flat 'reading' tone into an energetic 'presentation' tone
+    communicate = edge_tts.Communicate(text, voice, rate="+15%", pitch="+2Hz")
     await communicate.save(output_path)
 
 
@@ -48,13 +48,23 @@ def generate_tts_edge(text, output_path, voice=None):
     voice = voice or os.getenv("EDGE_TTS_VOICE", _get_session_voice())
     
     try:
-        # Run async edge-tts in a sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(_edge_tts_async(text, output_path, voice))
-        finally:
-            loop.close()
+        # Retry loop for transient network/DNS errors to Bing servers
+        for attempt in range(3):
+            try:
+                # Run async edge-tts in a sync context
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(_edge_tts_async(text, output_path, voice))
+                finally:
+                    loop.close()
+                break # Success!
+            except Exception as e:
+                logging.warning(f"Edge TTS attempt {attempt + 1}/3 failed: {e}")
+                if attempt == 2:
+                    raise
+                import time
+                time.sleep(2)
         
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
             logging.error("Edge TTS succeeded but output file is empty or missing.")

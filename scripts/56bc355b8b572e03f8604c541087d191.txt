@@ -1,0 +1,7 @@
+Imagine your computer's brain working in lightning-fast harmony, thanks to tiny instructions hidden everywhere.
+I/O operations are the backbone of data transfer, reading, and writing.
+The key to understanding them is through diagramming - it's like reading a blueprint.
+Input (I) devices send data to the CPU, while Output (O) devices receive it.
+Diagram 1: Sequential I/O - data travels through the CPU like a tiny pipeline.
+Diagram 2: Parallel I/O - multiple data streams flow in and out at the same time.
+But, did you know, some computers use hybrid I/O models to balance performance and power efficiency?

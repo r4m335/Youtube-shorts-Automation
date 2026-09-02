@@ -1,0 +1,7 @@
+Think PS5’s the only way? Wait until you see PS3’s new overclocked beast!
+We’re talking PS3 Pro v3, the third mod by Fun‑Equivalent‑7785, with a 750/1000 MHz RSX.
+It uses 3D‑printed ducts, server-grade heatsinks, and two Noctua fans spinning low.
+During test, the CPU stayed at 40°C and the RSX hit 42°C.
+Fans only run at 24% of max speed—quiet, efficient, and laser‑focused.
+With a 512GB SSD, a 2TB ISO HDD, and a PS5 pad plus Wingman X.E.2.
+Curious how they fine‑tuned the thermal profile? Hit like and subscribe for the deep dive!

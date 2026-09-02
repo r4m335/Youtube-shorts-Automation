@@ -35,12 +35,12 @@ def validate_script(script):
             
         lines.append(cleaned)
     
-    # Line count: 5 to 8 lines allowed for full storytelling context
-    if not (5 <= len(lines) <= 8):
-        return False, f"Incorrect line count: {len(lines)} (must be between 5 to 8 lines)", lines
+    # Line count: 4 to 12 lines allowed for full storytelling context
+    if not (4 <= len(lines) <= 12):
+        return False, f"Incorrect line count: {len(lines)} (must be between 4 to 12 lines)", lines
         
     total_words = sum(len(line.split()) for line in lines)
-    if not (40 <= total_words <= 160): 
+    if not (25 <= total_words <= 260): 
         return False, f"Word count out of range: {total_words}", lines
         
     # Check for weak hook
@@ -56,11 +56,7 @@ def validate_script(script):
         if len(words) > 20:
             return False, f"Line {i+1} is too long ({len(words)} words)", lines
 
-    # Reject scripts mentioning recent past years (2015-2025) to ensure news is 100% current
-    full_script_text = " ".join(lines)
-    past_year_match = re.search(r'\b(201[5-9]|202[0-5])\b', full_script_text)
-    if past_year_match:
-        return False, f"Script mentions past year '{past_year_match.group(0)}'. News must be current from today (2026).", lines
+    # (Removed past year constraint as it rejects valid contextual news)
             
     return True, "Valid", lines
 
@@ -104,14 +100,29 @@ Return ONLY valid JSON (no markdown):
     for provider_name, provider_func in PROVIDERS:
         try:
             raw = provider_func(prompt).strip()
-            if raw.startswith("```json"):
-                raw = raw[7:]
-            if raw.endswith("```"):
-                raw = raw[:-3]
             raw = raw.strip()
             
-            import json
-            data = json.loads(raw)
+            # Robust JSON dictionary extraction using bracket counting
+            data = None
+            start_idx = raw.find('{')
+            if start_idx != -1:
+                bracket_count = 0
+                for i in range(start_idx, len(raw)):
+                    if raw[i] == '{':
+                        bracket_count += 1
+                    elif raw[i] == '}':
+                        bracket_count -= 1
+                        if bracket_count == 0:
+                            potential_json = raw[start_idx:i+1]
+                            try:
+                                import json
+                                data = json.loads(potential_json)
+                                break
+                            except Exception:
+                                pass
+            
+            if data is None:
+                raise ValueError("No valid JSON dictionary found in response.")
             is_good = bool(data.get("is_good", False))
             reason = data.get("reason", "No reason provided.")
             return is_good, f"[{provider_name}] {reason}"

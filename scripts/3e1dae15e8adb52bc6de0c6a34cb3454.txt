@@ -1,0 +1,7 @@
+Beware, millions of Windows Servers are exposed due to a decades-old SQL flaw.
+A massive security vulnerability, affecting SQL Server, has been left unpatched for decades.
+Exploiting the flaw can give hackers admin access, devastating your Windows infrastructure.
+Microsoft released an official patch in the 90s, but many servers remain unpatched or offline.
+Experts urge all Windows administrators to update SQL Server immediately to prevent a disaster.
+What if you had no idea such a critical flaw existed on your servers all along?
+Will you check your Windows Servers tonight?

@@ -62,11 +62,16 @@ def pre_filter(tweets, max_age_hours=24):
             stats["retweets"] += 1
             continue
 
-        # Skip very short tweets
-        clean_text = re.sub(r"https?://\S+", "", text).strip()
-        if len(clean_text) < 30:
-            stats["short"] += 1
-            continue
+        # Skip very short tweets or single-sentence tweets (ONLY for 'sports' category)
+        if tweet.get("category") == "sports":
+            clean_text = re.sub(r"https?://\S+", "", text).strip()
+            
+            # Count sentences by splitting on punctuation. Filter out empty/tiny fragments.
+            sentences = [s for s in re.split(r'[.!?]+', clean_text) if len(s.strip()) > 5]
+            
+            if len(sentences) <= 1 or len(clean_text) < 30:
+                stats["short"] += 1
+                continue
 
         # Skip tweets whose posting timestamp is older than max_age_hours
         created_at = tweet.get("created_at", "")

@@ -263,7 +263,10 @@ def download_tweet_media(media_urls, temp_dir, index):
         try:
             if not url:
                 continue
-            ext = ".png" if ".png" in url.lower() else ".jpg"
+            if ".mp4" in url.lower() or "video.twimg.com" in url.lower():
+                ext = ".mp4"
+            else:
+                ext = ".png" if ".png" in url.lower() else ".jpg"
             output_path = os.path.join(temp_dir, f"tweet_media_{index}{ext}")
             
             response = requests.get(url, timeout=10)
@@ -857,6 +860,35 @@ def get_visual_for_line(line, temp_dir, index, topic="", tweet_media_urls=None, 
         if fetch_video_pexels(query, mp4_path):
             bg_video = mp4_path
             break
-    
     return primary_image, bg_video
 
+
+# ---------------------------------------------------------------------------
+# Semantic Context Extraction (RAG)
+# ---------------------------------------------------------------------------
+def fetch_topic_context(topic, limit=3):
+    """
+    Secretly searches DuckDuckGo HTML Lite for the topic and extracts the text snippets
+    from the first few search results. This acts as real-world background context (RAG) 
+    to prevent LLM hallucinations.
+    """
+    try:
+        from bs4 import BeautifulSoup
+        snippets = []
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
+        url = 'https://html.duckduckgo.com/html/'
+        r = requests.post(url, data={'q': f"{topic} news"}, headers=headers, timeout=10)
+        
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            for div in soup.find_all('a', class_='result__snippet'):
+                snippets.append(div.text.strip())
+                if len(snippets) >= limit:
+                    break
+                    
+        context_str = " ".join(snippets)
+        logging.info(f"Fetched {len(snippets)} context snippets for topic: '{topic[:30]}...'")
+        return context_str
+    except Exception as e:
+        logging.error(f"Failed to fetch context via DDG HTML: {e}")
+        return ""

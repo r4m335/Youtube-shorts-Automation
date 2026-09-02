@@ -1,12 +1,12 @@
 import logging
 import re
 from collections import defaultdict
-from src.storage.database import is_processed
+from src.storage.database import is_processed, is_text_processed
 
 
 def remove_known_tweets(tweets):
     """
-    Filters out tweets whose IDs already exist in the database.
+    Filters out tweets whose IDs or text content already exist in the database.
 
     Args:
         tweets: List of normalized tweet dicts.
@@ -15,15 +15,22 @@ def remove_known_tweets(tweets):
         List of tweet dicts that are NOT already in the database.
     """
     new_tweets = []
-    skipped = 0
+    skipped_id = 0
+    skipped_text = 0
+    
     for tweet in tweets:
         if is_processed(tweet["tweet_id"]):
-            skipped += 1
+            skipped_id += 1
+        elif is_text_processed(tweet["author"], tweet["text"]):
+            skipped_text += 1
         else:
             new_tweets.append(tweet)
 
-    if skipped > 0:
-        logging.info(f"Duplicate filter: skipped {skipped} already-processed tweets.")
+    if skipped_id > 0:
+        logging.info(f"Duplicate filter: skipped {skipped_id} already-processed tweet IDs.")
+    if skipped_text > 0:
+        logging.info(f"Duplicate filter: skipped {skipped_text} repeat text tweets from the same author.")
+        
     return new_tweets
 
 
@@ -98,6 +105,16 @@ def deduplicate_similar(tweets):
             merged_count += len(cluster) - 1
             best = max(cluster, key=lambda t: t.get("likes", 0) + t.get("retweets", 0))
             best["story_count"] = story_count
+            
+            # Aggregate texts from all tweets in the cluster to provide richer context to the LLM
+            aggregated_texts = []
+            for t in cluster:
+                if t["text"] not in aggregated_texts:
+                    aggregated_texts.append(t["text"])
+            
+            if len(aggregated_texts) > 1:
+                best["text"] = "\n\n--- Also Reported As ---\n\n".join(aggregated_texts)
+
             logging.info(
                 f"🔥 TRENDING STORY DETECTED: {story_count} accounts (@{', @'.join(list(unique_authors)[:4])}) "
                 f"posted about: '{best['text'][:60]}...'"

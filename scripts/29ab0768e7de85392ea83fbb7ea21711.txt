@@ -1,0 +1,6 @@
+Millions of sensitive Google Docs documents leak online sparking widespread panic and outrage worldwide.
+The leak, reportedly discovered in November 2022, exposed data from Google Workspace services for businesses.
+Unsecured files contained personal identifiable information, financial records, and confidential communications.
+Experts say the leak occurred as a result of an unsecured Google Cloud Storage bucket.
+The security failure could have happened due to human error or inadequate technical measures.
+Will the responsible parties be held accountable for these shocking data breaches?

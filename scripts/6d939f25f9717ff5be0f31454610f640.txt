@@ -1,0 +1,7 @@
+BREAKING: X just shook the social media world by OPEN-SOURCE its For You Timeline algorithm!
+X's decision aims to boost transparency and trust among users and developers alike.
+The open-source code will provide unprecedented insights into its content recommendation engine.
+Developers worldwide can now study and build upon the complex algorithm.
+X says this move will foster more innovation and safer online experiences.
+By releasing its source code, X is pushing the boundaries of what's possible with social media.
+The community can now scrutinize and contribute to the algorithm's development.

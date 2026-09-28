@@ -16,8 +16,8 @@ SPAM_KEYWORDS = [
 ]
 
 PAST_YEAR_RETRO_REGEX = re.compile(
-    r'\b(201[0-9]|202[0-5])\s+(kit|jersey|season|transfer|deal|move)\b|'
-    r'\b(in|back in|since|during)\s+(201[0-9]|202[0-5])\b|'
+    r'\b(201[0-9]|202[0-6])\s+(kit|jersey|season|transfer|deal|move)\b|'
+    r'\b(in|back in|since|during)\s+(201[0-9]|202[0-6])\b|'
     r'\b(throwback|on this day|years ago today|classic kit|vintage kit|old kit)\b',
     re.IGNORECASE
 )
@@ -174,7 +174,7 @@ REJECT if it is any of:
 - Old retro kit/jersey discussions, throwback photos (e.g. "2014 Chelsea kit"), or past transfer sagas (e.g. old Lukaku transfers)
 - Nostalgia, "on this day" posts, or throwback photos that provide ZERO new information or value to the audience
 - Generic clickbait or zero-substance titles lacking specific named entities/events (e.g. "what happens when a surprise winner of a champ")
-- Old news or past sports/transfer stories from previous years (2010-2025). For sports/football news, the news MUST be current breaking news from TODAY (2026)
+- Old news or past sports/transfer stories from previous years (2010-2026). For sports/football news, the news MUST be current breaking news from TODAY
 - An advertisement or promotion
 - A personal opinion or hot take
 - A meme or joke

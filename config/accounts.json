@@ -1,7 +1,4 @@
 {
-    "Movie": [
-        "DiscussingFilm"
-    ],
     "sports": [
         "David_Ornstein",
         "FabrizioRomano"
@@ -14,17 +11,11 @@
         "pubity",
         "InternetH0F"
     ],
-    "Kdrama": [
-        "KoreanUpdates"
-    ],
     "Tech": [
         "Pirat_Nation"
     ],
     "Anime": [
         "animeupdates"
-    ],
-    "India":[
-        "IndianGems_"
     ]
 
 }

@@ -1,37 +1,89 @@
 # Fully Autonomous YouTube Shorts Automation
 
-A production-ready, 100% Python-based automation pipeline that monitors real-time news and viral topics (via X/Twitter and RSS/Reddit), scripts, voices, renders, and uploads high-quality YouTube Shorts completely hands-free.
+A production-ready, fully autonomous Python pipeline that monitors real-time news from X (Twitter) via Playwright browser scraping, generates scripts with LLM, voices them with Edge TTS, renders vertical video with FFmpeg, and uploads to multiple YouTube channels — completely hands-free.
 
 ---
 
 ## 🚀 Features
 
-* **Real-Time X (Twitter) Monitoring (`twscrape`)**: Monitors curated X accounts across multiple niches (**Technology, World News, Sports, Cinema, India, Entertainment, Nature, Anime, Drama**) without X API fees.
-* **5-Minute Continuous Scheduler**: Continuous monitoring loop with automated rate-limiting, account sampling, and failure recovery.
-* **Multi-Channel Auto-Routing**: Dynamically routes video uploads to completely separate YouTube channels based on the topic's category using isolated per-channel OAuth tokens. Automatically creates and manages category-specific playlists (e.g., "Movie News", "Tech News") on each channel.
+* **Real-Time X (Twitter) Monitoring (Playwright)**: Scrapes curated X accounts across multiple niches (**Sports, World News, Tech, Anime, CDrama**) using headless Playwright browser — no API fees, no unofficial wrappers.
+* **5-Minute Continuous Scheduler**: Runs as a `while True` loop with automated ingestion, smart scraping (only scrapes categories with empty backlogs), and failure recovery.
+* **Multi-Channel Auto-Routing**: Dynamically routes uploads to separate YouTube channels based on topic category using isolated per-channel OAuth tokens:
+  | Channel | Categories |
+  |---|---|
+  | `entertainment` | CDrama |
+  | `sports` | Sports |
+  | `tech_world` | Tech, World News |
+  | `anime` | Anime |
+* **Correct YouTube Category Tagging**: Each video is tagged with the proper YouTube category ID (Sports → 17, Tech → 28, News → 25, Entertainment → 24).
 * **3-Layer Deduplication Engine**:
-  * **Database Tracking (`data/tweets.db`)**: SQLite tracking to ensure tweet IDs are never processed twice.
-  * **Entity Keyword Clustering**: Merges similar stories reported by different outlets into a single high-engagement video.
-  * **Semantic Memory (`data/topics.json`)**: 48-hour topic cache that prevents re-creating videos on similar themes.
-* **Intelligent Visual Fetching & Auto-Fallback**:
-  * **DuckDuckGo HTML Lite Scraping**: Bypasses search engine rate limits to reliably extract high-quality publisher `og:image` hero images for news topics.
-  * Multi-source fallback priority (Tweet Media -> Scraped Article Images -> Wikipedia -> TMDB -> Bing -> DuckDuckGo -> AI-generated images).
-* **LLM Script Auto-Refinement**: Built-in quality evaluator that automatically detects script violations and actively refines output until it passes content guidelines.
-* **Voice & Audio Processing**: Uses local Piper TTS or Azure TTS for natural narration, auto-synced silence gaps, and ducked Lo-Fi background music (`assets/bgm/`).
-* **Dynamic B-Roll & Advanced Subtitles**: 
-  * Fetches matching HD B-Roll or generates AI images using Stability AI.
-  * Generates TikTok-style native `.ass` subtitles with animated word-by-word green background highlighting and exact positioning to clear YouTube Shorts UI.
-* **Programmatic Thumbnails**: Rips video frames and overlays bold script hooks for custom thumbnails.
-* **Self-Cleaning Storage**: Built-in Garbage Collector automatically purges temporary directory artifacts older than 48 hours.
+  * **Database Tracking (`data/tweets.db`)**: SQLite tracking ensures tweet IDs are never processed twice.
+  * **Entity Keyword Clustering**: Merges similar stories reported by multiple accounts into a single trending video.
+  * **Semantic Memory (`data/topics.json`)**: 48-hour topic cache prevents re-creating videos on similar themes.
+* **Intelligent Visual Fetching & 8-Source Fallback Chain**:
+  1. Article `og:image` / `twitter:image` scraping (from URLs in tweets + DuckDuckGo article discovery)
+  2. Wikipedia / Wikimedia Commons
+  3. TMDB (movies/shows/actors)
+  4. Bing Image Search
+  5. SerpAPI Google Images
+  6. DuckDuckGo Images
+  7. Stability AI (AI-generated visuals)
+  8. Pexels / Pixabay (stock fallback)
+* **Gemini Vision Safety Check**: Every fetched image is verified for NSFW content and topic relevance using Gemini 3.5 Flash Vision before use.
+* **LLM Script Generation with Auto-Refinement**: 14-provider LLM fallback chain (Ollama → Groq → OpenRouter → Nvidia → Cloudflare → HuggingFace → Mistral → LLM7 → OpenAI → Gemini → Cohere → Zhipu). Scripts are auto-evaluated and refined if rejected.
+* **RAG Context Injection**: Fetches real-time search snippets via DuckDuckGo to ground LLM scripts in facts and prevent hallucinations.
+* **Edge TTS Narration**: Natural-sounding Microsoft Azure voices (free via `edge-tts`), with speed boost and pitch adjustment for energetic delivery.
+* **Dynamic Video Rendering**:
+  * Ken Burns zoom effect on images, crossfade transitions between segments
+  * YouTube Shorts-optimized ASS subtitles with word-by-word green karaoke highlighting
+  * Programmatic thumbnail generation with bold keyword overlay
+* **X Scraper Health Circuit Breaker**: Automatic degraded/disabled states if X scraping fails repeatedly, with 15-minute auto-recovery.
+* **Self-Cleaning Storage**: Garbage collector purges temp files and outputs older than 1 hour.
+
+---
+
+## 🗂 Project Structure
+
+```
+├── main.py                          # Entry point — continuous scheduler
+├── config/
+│   ├── accounts.json                # X accounts to monitor per category
+│   ├── channels.json                # YouTube channel routing config
+│   └── channels/                    # Per-channel OAuth credentials
+│       ├── entertainment/
+│       ├── sports/
+│       ├── tech_world/
+│       └── india/                   # (repurposed for anime channel)
+├── src/
+│   ├── ingestion/                   # Tweet fetching, filtering, topic generation
+│   │   ├── orchestrator.py          # LLM topic generation from tweets/RSS
+│   │   ├── scraper_job.py           # Phase 1 ingestion pipeline
+│   │   ├── filter.py                # Dedup cache & topic validation
+│   │   └── x/                       # Playwright-based X scraper
+│   │       ├── browser.py           # Playwright scraping engine
+│   │       ├── parser.py            # Tweet DOM parser
+│   │       ├── fetcher.py           # Account manager & async pipeline
+│   │       └── health.py            # Circuit breaker health checks
+│   ├── filters/                     # Pre-filter (spam, old, short) & LLM news filter
+│   ├── llm/                         # LLM provider chain, script gen, validation
+│   ├── audio/                       # Edge TTS, Piper TTS, audio processing
+│   ├── visuals/                     # Image fetching (8 sources), subtitle generation
+│   ├── render/                      # FFmpeg video segments, concat, mix, thumbnails
+│   ├── upload/                      # YouTube upload, playlist management, metadata
+│   └── storage/                     # SQLite database, trending backlog
+├── scripts/                         # Cached LLM scripts (auto-generated)
+├── data/                            # Runtime data (tweets.db, topics.json, temp files)
+├── output/                          # Final rendered videos
+└── logs/                            # System logs
+```
 
 ---
 
 ## 🛠 Prerequisites
 
-Ensure you have the following installed on your system:
 * **Python 3.10+**
-* **FFmpeg**: Installed and added to system `PATH`.
-* **Piper TTS**: Local Text-To-Speech model mapped in `.env`.
+* **FFmpeg**: Installed and on system `PATH`
+* **Playwright**: Run `playwright install chromium` after installing dependencies
 
 ---
 
@@ -45,52 +97,56 @@ YOUTUBE_CLIENT_ID=your_client_id
 YOUTUBE_CLIENT_SECRET=your_client_secret
 YOUTUBE_PROJECT_ID=your_project_id
 
-# LLM APIs
-GEMINI_API_KEY=your_gemini_api_key
-GROQ_API_KEY=your_groq_api_key
-OPENROUTER_API_KEY=your_openrouter_api_key
+# LLM APIs (at least one required, all optional — uses fallback chain)
+GROQ_API_KEY=your_groq_key
+GEMINI_API_KEY=your_gemini_key
+OPENROUTER_API_KEY=your_openrouter_key
+OLLAMA_URL=http://localhost:11434/api/generate
+OLLAMA_MODEL=gpt-oss:20b
+# ... (supports 14 providers total, see src/llm/providers.py)
 
 # Visual APIs
 PEXELS_API_KEY=your_pexels_key
-UNSPLASH_ACCESS_KEY=your_unsplash_access_key
+PIXABAY_API_KEY=your_pixabay_key
+SERPAPI_KEY=your_serpapi_key
+TMDB_API_KEY=your_tmdb_key
+STABILITY_API_KEY=your_stability_key
 
-# TTS Configuration
-PIPER_MODEL_PATH=C:\piper\models\en_US-hfc_male-medium.onnx
+# TTS
+EDGE_TTS_VOICE=en-US-AndrewNeural
 
-# X (Twitter) Credentials & Session Cookies
-X_USERNAME=your_x_username
-X_PASSWORD=your_x_password
-X_EMAIL=your_x_email
-X_EMAIL_PASSWORD=your_x_email_password
+# X (Twitter) Session Cookies
 X_COOKIES=auth_token=YOUR_AUTH_TOKEN; ct0=YOUR_CT0
 ```
 
-2. **Multi-Channel Configuration**: 
-   The pipeline routes uploads to specific channels based on category. This is configured in `config/channels.json`. For each channel, you must provide a unique OAuth 2.0 Client ID (type: **Desktop app**) placed in its respective directory:
+2. **Multi-Channel Configuration**:
+   Place a unique OAuth 2.0 Client ID (type: **Desktop app**) for each YouTube channel:
    ```
    config/channels/
    ├── entertainment/
-   │   ├── client_secret.json  <-- Place your Google Cloud Desktop app credentials here
-   ├── tech_sports/
-   │   ├── client_secret.json
-   └── world_news/
-       ├── client_secret.json
+   │   └── client_secret.json
+   ├── sports/
+   │   └── client_secret.json
+   ├── tech_world/
+   │   └── client_secret.json
+   └── india/
+       └── client_secret.json    ← used for anime channel
    ```
-   *Note: The pipeline will prompt you to authenticate via your browser on the very first upload for each channel. The resulting `token.json` will be saved next to the client secret.*
+   *The pipeline will prompt browser auth on the first upload per channel. The `token.json` is saved automatically.*
 
 ---
 
-## ⚙️ Monitored Accounts Config
+## ⚙️ Monitored Accounts
 
-Edit `config/accounts.json` to add or remove monitored handles across any niche:
+Edit `config/accounts.json` to configure which X accounts to monitor per category:
 
 ```json
 {
-    "technology": ["techradar", "beebomco", "ReutersTech"],
-    "world": ["rawsalerts", "disclosetv", "GlobeEyeNews"],
-    "sports": ["FabrizioRomano", "Transfermarkt", "David_Ornstein"],
-    "cinema": ["DiscussingFilm", "CultureCrave", "DEADLINE"],
-    "Anime": ["SugoiLITE", "myanimelist"]
+    "sports": ["David_Ornstein", "FabrizioRomano"],
+    "Cdrama": ["ForCdrama"],
+    "world": ["interesting_aIl", "pubity", "InternetH0F"],
+    "Tech": ["Pirat_Nation"],
+    "Anime": ["animeupdates"]
 }
 ```
 
@@ -98,35 +154,42 @@ Edit `config/accounts.json` to add or remove monitored handles across any niche:
 
 ## ⚙️ Installation
 
-1. Clone the repository and enter the directory:
+1. Clone and enter:
    ```bash
    git clone https://github.com/r4m335/Youtube-shorts-Automation.git
    cd Youtube-shorts-Automation
    ```
 
-2. Create and activate a Virtual Environment:
+2. Create venv and activate:
    ```bash
    python -m venv venv
-   .\venv\Scripts\Activate.ps1
+   .\venv\Scripts\Activate.ps1    # Windows
+   source venv/bin/activate        # Linux/Mac
    ```
 
 3. Install dependencies:
    ```bash
    pip install -r requirements.txt
+   playwright install chromium
    ```
-
-4. Drop royalty-free `.mp3` background music into `assets/bgm/`.
 
 ---
 
 ## 🎬 Usage
 
-To start the continuous automated scheduler:
+Start the continuous scheduler:
 ```bash
 python main.py
 ```
 
-The pipeline will run in a continuous loop every 5 minutes, checking for new viral tweets and news, generating videos, uploading them to YouTube, and sleeping between cycles.
+Skip specific channels:
+```bash
+python main.py --skip-channel sports --skip-channel entertainment
+```
+
+The pipeline runs in a continuous 5-minute cycle:
+1. **Phase 1 (Ingestion)**: Scrapes X accounts, filters spam/duplicates, stores pending tweets in SQLite
+2. **Phase 2 (Generation)**: For each channel, pulls pending tweets, generates topics via LLM, creates script → audio → visuals → video → uploads to YouTube
 
 ---
 

@@ -111,6 +111,24 @@ def get_authenticated_service(category):
 
 
 # ---------------------------------------------------------------------------
+# YouTube Category ID Mapping
+# ---------------------------------------------------------------------------
+# Maps internal category names to YouTube's video category IDs.
+# Full list: https://developers.google.com/youtube/v3/docs/videoCategories/list
+YOUTUBE_CATEGORY_IDS = {
+    "Movie":   "24",  # Entertainment
+    "Cdrama":  "24",  # Entertainment
+    "Kdrama":  "24",  # Entertainment
+    "Anime":   "24",  # Entertainment
+    "sports":  "17",  # Sports
+    "Tech":    "28",  # Science & Technology
+    "world":   "25",  # News & Politics
+    "India":   "25",  # News & Politics
+}
+YOUTUBE_CATEGORY_DEFAULT = "25"  # News & Politics fallback
+
+
+# ---------------------------------------------------------------------------
 # Upload
 # ---------------------------------------------------------------------------
 
@@ -121,13 +139,14 @@ def upload_video(file_path, title, description, tags, category, privacy_status="
     if not youtube:
         return None
 
-    logging.info(f"Uploading '{title}' to channel '{channel_name}'...")
+    yt_category_id = YOUTUBE_CATEGORY_IDS.get(category, YOUTUBE_CATEGORY_DEFAULT)
+    logging.info(f"Uploading '{title}' to channel '{channel_name}' (YT categoryId={yt_category_id})...")
     body = {
         "snippet": {
             "title": title,
             "description": description,
             "tags": tags,
-            "categoryId": "24"  # Entertainment
+            "categoryId": yt_category_id
         },
         "status": {
             "privacyStatus": privacy_status,

@@ -10,7 +10,7 @@ from .exceptions import XSessionState, XTimeoutError, XNetworkError, XParseError
 from .models import Tweet
 
 CATEGORY_PRIORITY = [
-    "sports", "world", "India", "Tech", "Movie", "Anime", "Cdrama", "Kdrama"
+    "sports", "world", "Tech", "Anime", "Cdrama"
 ]
 
 def fetch_and_filter_tweets(tweets_per_account=10, target_category=None):

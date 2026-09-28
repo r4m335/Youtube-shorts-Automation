@@ -1,7 +1,7 @@
 # Ignore Python virtual env
 venv/
 
-# Env files
+# Env files (contains API keys)
 .env
 .env.*
 
@@ -11,6 +11,9 @@ logs/
 data/
 assets/
 
+# Script cache (LLM-generated scripts)
+scripts/
+
 # Playwright authentication state
 data/x/playwright_state.json
 
@@ -19,7 +22,7 @@ data/x/playwright_state.json
 *.sqlite
 *.sqlite3
 
-# Media
+# Media files (generated/downloaded)
 *.mp4
 *.wav
 *.srt
@@ -28,6 +31,7 @@ data/x/playwright_state.json
 *.jpeg
 *.png
 *.mp3
+*.webp
 
 # Python cache
 __pycache__/
@@ -43,3 +47,15 @@ client_secret.json
 config/channels/*/token.json
 config/channels/*/client_secret.json
 config/playlist_cache.json
+
+# Temp / scratch files
+temp_*.json
+scratch_*.py
+out.wav
+out_test.mp4
+dummy.jpg
+dummy.mp4
+
+# IDE
+.vscode/
+.idea/

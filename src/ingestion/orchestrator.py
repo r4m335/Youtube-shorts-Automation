@@ -347,7 +347,7 @@ Example: ["OpenAI Releases GPT-6", "Apple Unveils M5 Chips"]
 
 
 CATEGORY_PRIORITY = [
-    "sports", "world", "India", "Tech", "Movie", "Anime", "Cdrama", "Kdrama"
+    "sports", "world", "Tech", "Anime", "Cdrama"
 ]
 
 

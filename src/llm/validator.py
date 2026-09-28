@@ -84,7 +84,7 @@ Script:
 STRICT EVALUATION RULES (MUST FOLLOW):
 
 ONLY REJECT (`is_good: false`) IF IT MATCHES ONE OF THESE 2 CRITICAL VIOLATIONS:
-1. OUTDATED NEWS & RETRO VIOLATION: News or sports updates mentioning older years (2010-2025), old retro kits/jerseys (e.g. "2014 Chelsea kit"), throwback photos, or past season transfers.
+1. OUTDATED NEWS & RETRO VIOLATION: News or sports updates mentioning older years (2010-2026), old retro kits/jerseys (e.g. "2014 Chelsea kit"), throwback photos, or past season transfers.
 2. ZERO-NEWS FLUFF & TRIVIAL CONTENT: Fast food/restaurant/cafe menu updates, food item lists, or generic clickbait with no named real-world event.
 
 STRICT PROHIBITIONS — DO NOT REJECT (`is_good: true`) FOR ANY OF THE FOLLOWING:

@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 import logging
 import time
 import glob
@@ -229,9 +230,15 @@ SCHEDULER_INTERVAL = 300  # 5 minutes in seconds
 
 
 def main():
+    parser = argparse.ArgumentParser(description="YouTube Shorts Automation Pipeline")
+    parser.add_argument("--skip-channel", action="append", default=[], help="Skip processing for a specific channel (e.g. entertainment). Can be used multiple times.")
+    args = parser.parse_args()
+
     logging.info("=" * 60)
     logging.info("Starting YouTube Shorts Pipeline — Continuous Scheduler Mode")
     logging.info(f"Cycle interval: {SCHEDULER_INTERVAL // 60} minutes")
+    if args.skip_channel:
+        logging.info(f"Skipping channels: {args.skip_channel}")
     logging.info("=" * 60)
 
     logging.info("Checking for twscrape updates...")
@@ -319,6 +326,10 @@ def main():
             from src.ingestion.filter import filter_and_cache_topics, remove_from_cache
             
             for channel_name, channel_cfg in channels.items():
+                if channel_name in args.skip_channel:
+                    logging.info(f"=== Skipping Channel '{channel_name}' due to --skip-channel ===")
+                    continue
+                
                 channel_categories = channel_cfg.get("categories", [])
                 channel_success = 0
                 

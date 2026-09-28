@@ -1,21 +1,21 @@
 {
   "entertainment": {
-    "categories": ["Movie", "Cdrama", "Kdrama", "Anime"],
+    "categories": ["Cdrama"],
     "client_secret": "config/channels/entertainment/client_secret.json",
     "token_file": "config/channels/entertainment/token.json"
   },
-  "tech_sports": {
-    "categories": ["Tech", "sports"],
-    "client_secret": "config/channels/tech_sports/client_secret.json",
-    "token_file": "config/channels/tech_sports/token.json"
+  "sports": {
+    "categories": ["sports"],
+    "client_secret": "config/channels/sports/client_secret.json",
+    "token_file": "config/channels/sports/token.json"
   },
-  "world_news": {
-    "categories": ["world"],
-    "client_secret": "config/channels/world_news/client_secret.json",
-    "token_file": "config/channels/world_news/token.json"
+  "tech_world": {
+    "categories": ["Tech", "world"],
+    "client_secret": "config/channels/tech_world/client_secret.json",
+    "token_file": "config/channels/tech_world/token.json"
   },
-  "india": {
-    "categories": ["India"],
+  "anime": {
+    "categories": ["Anime"],
     "client_secret": "config/channels/india/client_secret.json",
     "token_file": "config/channels/india/token.json"
   }

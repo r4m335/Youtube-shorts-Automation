@@ -169,40 +169,54 @@ Rules:
         return [sorted_keywords[i % len(sorted_keywords)] for i in range(len(lines))]
 
 
+GENERIC_NOISE_WORDS = {
+    "this", "that", "these", "those", "here", "there", "what", "when", "where", "which", "who",
+    "today", "yesterday", "tomorrow", "video", "shorts", "youtube", "breaking", "report",
+    "reports", "sparks", "rumors", "rumour", "rumours", "news", "update", "updates",
+    "netizens", "fans", "people", "everyone", "someone", "business", "car", "deal", "official"
+}
+
+
 def extract_visual_keywords(line, topic=""):
     """
-    Extract multiple search keywords from a line and topic for better visual matching.
-    Prioritizes proper nouns (player names, team names, companies) over generic words.
-    Returns a list of search queries from most specific to most generic.
+    Extract search queries from topic and line using full title and actor/player names.
+    Avoids arbitrary word-length sorting that picks generic nouns like 'Business'.
     """
-    combined_raw = f"{line} {topic}"
-    words = "".join(c for c in combined_raw if c.isalnum() or c.isspace()).split()
-    valid_words = [w for w in words if w.lower() not in STOPWORDS and len(w) > 2]
-    
-    if not valid_words:
-        return ["news"]
-    
-    # Categorize proper nouns (capitalized) vs normal words
-    proper_nouns = [w for w in valid_words if w[0].isupper()]
-    
     queries = []
     
-    # 1. Topic proper nouns combined (e.g. "Messi Inter Miami" or "Real Madrid Yamal")
-    if len(proper_nouns) >= 2:
-        queries.append(" ".join(dict.fromkeys(proper_nouns[:3])))
-    elif proper_nouns:
-        queries.append(proper_nouns[0])
-    
-    # 2. Two longest words combined
-    sorted_words = sorted(valid_words, key=len, reverse=True)
-    if len(sorted_words) >= 2:
-        two_words = f"{sorted_words[0]} {sorted_words[1]}"
-        if two_words not in queries:
-            queries.append(two_words)
-    
-    # 3. Single main keyword fallback
-    if sorted_words[0] not in queries:
-        queries.append(sorted_words[0])
+    # 1. Full Topic Title (cleaned)
+    clean_topic = re.sub(r'["\'`*#]', '', topic).strip()
+    if clean_topic and len(clean_topic.split()) >= 2:
+        queries.append(clean_topic)
+        
+    # 2. Extract Multi-word Proper Names (e.g. "Chen Feiyu", "Sun Qian", "Wang Yibo")
+    combined = f"{topic} {line}"
+    name_patterns = re.findall(r'\b[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+)+\b', combined)
+    valid_names = []
+    for name in name_patterns:
+        words = name.split()
+        if not any(w.lower() in GENERIC_NOISE_WORDS for w in words):
+            if name not in valid_names:
+                valid_names.append(name)
+                
+    if valid_names:
+        for name in valid_names:
+            photo_q = f"{name} photo"
+            if photo_q not in queries:
+                queries.append(photo_q)
+            if name not in queries:
+                queries.append(name)
+                
+    # 3. Clean line proper nouns (specific to this line)
+    line_words = "".join(c for c in line if c.isalnum() or c.isspace()).split()
+    line_proper = [w for w in line_words if w[0].isupper() and w.lower() not in STOPWORDS and w.lower() not in GENERIC_NOISE_WORDS]
+    if line_proper:
+        lp_query = " ".join(dict.fromkeys(line_proper[:3]))
+        if lp_query and lp_query not in queries:
+            queries.append(lp_query)
+            
+    if not queries:
+        queries.append(clean_topic or "news")
         
     return queries
 
@@ -284,34 +298,79 @@ def download_tweet_media(media_urls, temp_dir, index):
 
 
 # ---------------------------------------------------------------------------
-# Source 1.5: Article Images via SerpAPI & Scraping
+# Source 1.5: Article Images via Search & Scraping
 # ---------------------------------------------------------------------------
+def _search_web_articles_and_snippets(query, limit=5):
+    """
+    Searches the web for articles and snippets about a query.
+    1. Primary: Bing Web Search (unwraps redirect URLs, fast, reliable)
+    2. Fallback: DuckDuckGo via modern ddgs package
+    Returns a list of dicts: [{'url': ..., 'snippet': ...}, ...]
+    """
+    results = []
+    
+    # 1. Bing Web Search (Primary)
+    try:
+        import base64
+        from bs4 import BeautifulSoup
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+        url = f"https://www.bing.com/search?q={requests.utils.quote(query)}"
+        r = requests.get(url, headers=headers, timeout=10)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, "html.parser")
+            for li in soup.select("li.b_algo"):
+                a = li.select_one("h2 a")
+                p = li.select_one(".b_caption p, p")
+                if a and a.get("href"):
+                    href = a["href"]
+                    # Unwrap Bing tracking redirect if present
+                    if "/ck/a?" in href and "&u=a1" in href:
+                        try:
+                            b64_part = href.split("&u=a1")[1].split("&")[0]
+                            b64_part += "=" * ((4 - len(b64_part) % 4) % 4)
+                            real_url = base64.urlsafe_b64decode(b64_part).decode("utf-8", errors="ignore")
+                            if real_url.startswith("http"):
+                                href = real_url
+                        except Exception:
+                            pass
+                    snippet = p.get_text(strip=True) if p else ""
+                    results.append({"url": href, "snippet": snippet})
+                    if len(results) >= limit:
+                        break
+            if results:
+                logging.info(f"Bing Search discovered {len(results)} results for '{query[:30]}...'")
+                return results
+    except Exception as e:
+        logging.warning(f"Bing search failed for '{query[:30]}...': {e}")
+        
+    # 2. DuckDuckGo via ddgs package (Fallback)
+    try:
+        from ddgs import DDGS
+        for r in DDGS().text(query, max_results=limit):
+            href = r.get("href")
+            snippet = r.get("body", "")
+            if href and href.startswith("http"):
+                results.append({"url": href, "snippet": snippet})
+        if results:
+            logging.info(f"DDGS search discovered {len(results)} results for '{query[:30]}...'")
+            return results
+    except Exception as e:
+        logging.warning(f"DDGS search fallback failed for '{query[:30]}...': {e}")
+        
+    return results
+
+
 def discover_articles(topic, limit=5):
     """
-    Uses DuckDuckGo HTML Lite search to find real article URLs about the topic.
-    This guarantees real URLs and avoids LLM hallucination (which returns 404s).
+    Finds real article URLs about the topic using Bing Search with DuckDuckGo fallback.
     """
-    try:
-        from bs4 import BeautifulSoup
-        urls = []
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
-        url = 'https://html.duckduckgo.com/html/'
-        r = requests.post(url, data={'q': f"{topic} news"}, headers=headers, timeout=10)
-        
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            for a in soup.find_all('a', class_='result__url'):
-                href = a.get('href')
-                if href and href.startswith('http'):
-                    urls.append(href)
-                    if len(urls) >= limit:
-                        break
-                        
-        logging.info(f"DDG HTML Search discovered {len(urls)} real article URLs for '{topic[:30]}...'")
-        return urls
-    except Exception as e:
-        logging.error(f"Failed to discover articles via DDG HTML: {e}")
-        return []
+    items = _search_web_articles_and_snippets(f"{topic} news", limit=limit)
+    urls = [item["url"] for item in items if item.get("url")]
+    logging.info(f"Discovered {len(urls)} real article URLs for '{topic[:30]}...'")
+    return urls
 
 def scrape_article_images(urls, temp_dir):
     """
@@ -763,15 +822,15 @@ def get_visual_for_line(line, temp_dir, index, topic="", tweet_media_urls=None, 
     """
     Fetches the best visual for a script line using a multi-source priority chain.
     
-    Priority chain (As requested by User):
+    Priority chain:
     1. Tweet media
     2. Article URL -> og:image
-    3. LLM finds related articles -> og:image
-    4. Wikipedia
-    5. TMDB
-    6. Bing
-    7. Google
-    8. DuckDuckGo
+    3. Wikipedia
+    4. TMDB
+    5. DuckDuckGo Images (superior entity recognition for Asian names)
+    6. Bing Images
+    7. Google (SerpAPI)
+    8. Stability AI
     9. AI-generated image
     """
     # Priority 1: Tweet media image (always most relevant)
@@ -794,15 +853,17 @@ def get_visual_for_line(line, temp_dir, index, topic="", tweet_media_urls=None, 
         logging.info(f"Using scraped article image for line {index}: {article_image}")
         return jpg_path, None
     
-    # Generate search queries: LLM smart query (primary) + extracted keywords (fallbacks)
-    smart_query = generate_smart_search_query(line, topic, category)
+    # Generate search queries: Full Title & individual actor names (primary) + LLM smart query (fallback)
     fallback_keywords = extract_visual_keywords(line, topic)
+    smart_query = generate_smart_search_query(line, topic, category)
     
-    # Build ordered list of queries to try: smart query first, then fallbacks (deduplicated)
-    all_queries = [smart_query]
+    # Build ordered list of queries: Full Title & actor names FIRST, then smart_query
+    all_queries = []
     for kw in fallback_keywords:
-        if kw.lower() != smart_query.lower():
+        if kw and kw not in all_queries:
             all_queries.append(kw)
+    if smart_query and not any(smart_query.lower() == q.lower() for q in all_queries):
+        all_queries.append(smart_query)
     
     primary_image = None
     
@@ -815,30 +876,30 @@ def get_visual_for_line(line, temp_dir, index, topic="", tweet_media_urls=None, 
     # Priority 4: TMDB (for cinema/entertainment categories)
     if not primary_image:
         cat_lower = category.lower() if category else ""
-        if cat_lower in ("cinema", "entertainment", "anime", "drama", ""):
+        if cat_lower in ("cinema", "entertainment", "anime", "drama", "cdrama", ""):
             for query in all_queries:
                 if fetch_image_tmdb(query, jpg_path):
                     primary_image = jpg_path
                     break
                     
-    # Priority 5: Bing Image Search
+    # Priority 5: DuckDuckGo Images (ahead of Bing — superior name entity recognition)
+    if not primary_image:
+        for query in all_queries:
+            if fetch_image_duckduckgo(query, jpg_path):
+                primary_image = jpg_path
+                break
+
+    # Priority 6: Bing Image Search
     if not primary_image:
         for query in all_queries:
             if fetch_image_bing(query, jpg_path):
                 primary_image = jpg_path
                 break
                 
-    # Priority 6: SerpAPI Google Images
+    # Priority 7: SerpAPI Google Images
     if not primary_image:
         for query in all_queries:
             if fetch_image_serpapi(query, jpg_path):
-                primary_image = jpg_path
-                break
-                
-    # Priority 7: DuckDuckGo Images
-    if not primary_image:
-        for query in all_queries:
-            if fetch_image_duckduckgo(query, jpg_path):
                 primary_image = jpg_path
                 break
                 
@@ -868,27 +929,12 @@ def get_visual_for_line(line, temp_dir, index, topic="", tweet_media_urls=None, 
 # ---------------------------------------------------------------------------
 def fetch_topic_context(topic, limit=3):
     """
-    Secretly searches DuckDuckGo HTML Lite for the topic and extracts the text snippets
-    from the first few search results. This acts as real-world background context (RAG) 
-    to prevent LLM hallucinations.
+    Searches the web for the topic and extracts text snippets from search results.
+    Acts as real-world background context (RAG) to prevent LLM hallucinations.
+    Uses Bing Search with DuckDuckGo fallback.
     """
-    try:
-        from bs4 import BeautifulSoup
-        snippets = []
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'}
-        url = 'https://html.duckduckgo.com/html/'
-        r = requests.post(url, data={'q': f"{topic} news"}, headers=headers, timeout=10)
-        
-        if r.status_code == 200:
-            soup = BeautifulSoup(r.text, 'html.parser')
-            for div in soup.find_all('a', class_='result__snippet'):
-                snippets.append(div.text.strip())
-                if len(snippets) >= limit:
-                    break
-                    
-        context_str = " ".join(snippets)
-        logging.info(f"Fetched {len(snippets)} context snippets for topic: '{topic[:30]}...'")
-        return context_str
-    except Exception as e:
-        logging.error(f"Failed to fetch context via DDG HTML: {e}")
-        return ""
+    items = _search_web_articles_and_snippets(f"{topic} news", limit=limit)
+    snippets = [item["snippet"] for item in items if item.get("snippet")]
+    context_str = " ".join(snippets)
+    logging.info(f"Fetched {len(snippets)} context snippets for topic: '{topic[:30]}...'")
+    return context_str

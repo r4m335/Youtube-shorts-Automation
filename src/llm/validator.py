@@ -35,12 +35,23 @@ def validate_script(script):
             
         lines.append(cleaned)
     
-    # Line count: 4 to 12 lines allowed for full storytelling context
-    if not (4 <= len(lines) <= 12):
-        return False, f"Incorrect line count: {len(lines)} (must be between 4 to 12 lines)", lines
+    # Fallback: If model output paragraphs without newlines (e.g. single block of text),
+    # automatically split on sentence boundaries into individual lines.
+    if len(lines) < 4:
+        sentence_pattern = r'(?<!\b[A-Za-z]\.)(?<!\bMr\.)(?<!\bDr\.)(?<!\bMs\.)(?<=[.!?])\s+'
+        split_lines = []
+        for line in lines:
+            parts = [s.strip() for s in re.split(sentence_pattern, line) if s.strip()]
+            split_lines.extend(parts if parts else [line])
+        if len(split_lines) >= 4:
+            lines = split_lines
+
+    # Line count: 4 to 15 lines allowed for full storytelling context
+    if not (4 <= len(lines) <= 15):
+        return False, f"Incorrect line count: {len(lines)} (must be between 4 to 15 lines)", lines
         
     total_words = sum(len(line.split()) for line in lines)
-    if not (25 <= total_words <= 260): 
+    if not (25 <= total_words <= 300): 
         return False, f"Word count out of range: {total_words}", lines
         
     # Check for weak hook

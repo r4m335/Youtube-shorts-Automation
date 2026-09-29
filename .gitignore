@@ -49,6 +49,7 @@ config/channels/*/client_secret.json
 config/playlist_cache.json
 
 # Temp / scratch files
+scratch/
 temp_*.json
 scratch_*.py
 out.wav

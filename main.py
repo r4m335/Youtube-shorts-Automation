@@ -74,7 +74,7 @@ def cleanup_topic_temp_files(temp_dir):
     except Exception as e:
         logging.warning(f"GC: Could not clean up {temp_dir}: {e}")
 
-def process_single_topic(topic, category, tweet_media_urls=None):
+def process_single_topic(topic, category, tweet_media_urls=None, tweet_text=""):
     logging.info(f"--- Starting pipeline for topic: '{topic}' ---")
     
     # Reset TTS voice for this video (randomly picks Jenny or Andrew)
@@ -128,9 +128,10 @@ def process_single_topic(topic, category, tweet_media_urls=None):
         # Pre-fetch article images pool based on user's hybrid pipeline
         article_image_pool = []
         
-        # 1. Extract URLs from the topic (tweet text)
+        # 1. Extract URLs from the tweet text and topic
         import re
-        topic_urls = re.findall(r'(https?://[^\s]+)', topic)
+        source_text = f"{tweet_text} {topic}".strip()
+        topic_urls = re.findall(r'(https?://[^\s]+)', source_text)
         if topic_urls:
             article_image_pool.extend(scrape_article_images(topic_urls, temp_dir))
             
@@ -232,11 +233,15 @@ SCHEDULER_INTERVAL = 300  # 5 minutes in seconds
 def main():
     parser = argparse.ArgumentParser(description="YouTube Shorts Automation Pipeline")
     parser.add_argument("--skip-channel", action="append", default=[], help="Skip processing for a specific channel (e.g. entertainment). Can be used multiple times.")
+    parser.add_argument("--max-videos", type=int, default=32, help="Stop pipeline automatically after uploading this many videos (default: 32)")
     args = parser.parse_args()
+
+    MAX_TOTAL_VIDEOS = args.max_videos
 
     logging.info("=" * 60)
     logging.info("Starting YouTube Shorts Pipeline — Continuous Scheduler Mode")
     logging.info(f"Cycle interval: {SCHEDULER_INTERVAL // 60} minutes")
+    logging.info(f"Max video upload target: {MAX_TOTAL_VIDEOS}")
     if args.skip_channel:
         logging.info(f"Skipping channels: {args.skip_channel}")
     logging.info("=" * 60)
@@ -263,6 +268,10 @@ def main():
     first_run = True
 
     while True:
+        if global_success_count >= MAX_TOTAL_VIDEOS:
+            logging.info(f"🎯 Target limit of {MAX_TOTAL_VIDEOS} videos reached ({global_success_count}/{MAX_TOTAL_VIDEOS}). Pipeline stopping automatically.")
+            break
+
         cycle_start = time.time()
         
         # ---------------------------------------------------------
@@ -326,6 +335,9 @@ def main():
             from src.ingestion.filter import filter_and_cache_topics, remove_from_cache
             
             for channel_name, channel_cfg in channels.items():
+                if global_success_count >= MAX_TOTAL_VIDEOS:
+                    break
+
                 if channel_name in args.skip_channel:
                     logging.info(f"=== Skipping Channel '{channel_name}' due to --skip-channel ===")
                     continue
@@ -338,13 +350,13 @@ def main():
                 # Round-robin through this channel's categories until 8 videos
                 max_passes = VIDEOS_PER_CHANNEL  # safety limit to avoid infinite loop
                 for pass_num in range(max_passes):
-                    if channel_success >= VIDEOS_PER_CHANNEL:
+                    if channel_success >= VIDEOS_PER_CHANNEL or global_success_count >= MAX_TOTAL_VIDEOS:
                         break
                     
                     all_skipped = True  # track if all categories had no tweets
                     
                     for category in channel_categories:
-                        if channel_success >= VIDEOS_PER_CHANNEL:
+                        if channel_success >= VIDEOS_PER_CHANNEL or global_success_count >= MAX_TOTAL_VIDEOS:
                             break
                         
                         logging.info(f"[{channel_name}] Pass {pass_num+1}, checking '{category}' ({channel_success}/{VIDEOS_PER_CHANNEL})...")
@@ -375,13 +387,16 @@ def main():
                             logging.info(f"Generating video for topic: '{topic}'")
                             best_tweet_media = None
                             
-                            if process_single_topic(topic, category, tweet_media_urls=best_tweet_media):
+                            if process_single_topic(topic, category, tweet_media_urls=best_tweet_media, tweet_text=tweet.get("text", "")):
                                 channel_success += 1
                                 global_success_count += 1
                                 with open("logs/success.log", "a", encoding="utf-8") as f:
                                     f.write(f"{time.time()},{category},{topic}\n")
                                 mark_tweet_status(tweet["tweet_id"], "completed", topic=topic, youtube_id="generated")
                                 logging.info(f"[{channel_name}] '{category}' video done ({channel_success}/{VIDEOS_PER_CHANNEL}, total {global_success_count}/{total_target})")
+                                if global_success_count >= MAX_TOTAL_VIDEOS:
+                                    logging.info(f"🎯 Target limit of {MAX_TOTAL_VIDEOS} videos reached ({global_success_count}/{MAX_TOTAL_VIDEOS})! Pipeline completed successfully. Exiting.")
+                                    return
                             else:
                                 remove_from_cache(topic)
                                 logging.warning(f"Failed to generate video for '{topic}'. Marking tweet as failed.")
@@ -403,6 +418,9 @@ def main():
                 logging.info(f"=== Channel '{channel_name}' complete: {channel_success}/{VIDEOS_PER_CHANNEL} videos ===")
             
             logging.info(f"All channels processed. Total videos: {global_success_count}/{total_target}")
+            if global_success_count >= MAX_TOTAL_VIDEOS:
+                logging.info(f"🎯 Target limit of {MAX_TOTAL_VIDEOS} videos reached! Pipeline shutting down.")
+                break
 
         except KeyboardInterrupt:
             logging.info("Scheduler interrupted by user. Shutting down.")

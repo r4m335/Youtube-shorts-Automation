@@ -8,36 +8,39 @@ def create_video_segment(visual_data, duration, output_path, fps=30, is_hook=Fal
     The output is cropped/scaled to 1080x1920 (9:16 portrait).
     
     If visual_data is a tuple (image_path, video_path) and duration > 2.0,
-    it shows the image for the first 2 seconds, then switches to the video.
+    it shows the image for the first 2 seconds, then switches to the background video clip.
     """
     frames = int(duration * fps)
     
     # Handle tuple format (image_path, video_path)
     if isinstance(visual_data, tuple):
         img_path, vid_path = visual_data
-        logging.info(f"DEBUG: create_video_segment received tuple. img_path type={type(img_path)}, vid_path type={type(vid_path)}")
     else:
-        # Backward compatibility if a string was passed
         img_path, vid_path = visual_data, None
-        logging.info(f"DEBUG: create_video_segment received non-tuple: {type(visual_data)}")
+    
+    if not img_path or not os.path.exists(img_path):
+        logging.error(f"Image/visual path does not exist: {img_path}")
+        return False
         
-    # If no video is provided or duration is too short, just use the image
-    if not vid_path or duration <= 2.0:
-        if isinstance(img_path, tuple):
-            logging.error(f"FATAL DEBUG: img_path IS A TUPLE! {img_path}")
-            
-        if img_path.lower().endswith('.mp4'):
-            # It's actually a video string passed directly
-            vf_filters = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1"
-            if is_hook:
-                vf_filters += f",zoompan=z='min(zoom+0.002,1.12)':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920:fps={fps}"
-            
+    is_video = str(img_path).lower().endswith((".mp4", ".mov", ".webm", ".mkv", ".m4v"))
+    if not is_video:
+        try:
+            with open(img_path, "rb") as f:
+                header = f.read(16)
+            if len(header) >= 8 and header[4:8] == b'ftyp':
+                is_video = True
+        except Exception:
+            pass
+
+    # If no background video, or duration too short, or img_path itself is a video: single asset mode
+    if not vid_path or not os.path.exists(vid_path) or duration <= 2.0 or is_video:
+        if is_video:
             command = [
                 "ffmpeg", "-y", "-stream_loop", "-1", "-i", img_path,
                 "-t", str(duration),
-                "-vf", vf_filters,
-                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps),
-                "-an", output_path
+                "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps), "-an",
+                output_path
             ]
         else:
             zoom_speed = "0.002" if is_hook else "0.001"
@@ -49,23 +52,20 @@ def create_video_segment(visual_data, duration, output_path, fps=30, is_hook=Fal
                     f"scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
                     f"zoompan=z='min(zoom+{zoom_speed},{max_zoom})':d={frames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1080x1920"
                 ),
-                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps),
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps), "-an",
                 output_path
             ]
     else:
-        # Hybrid mode: image for 2s, then video
+        # Hybrid mode: image for first 2.0s with zoompan, then switch to stock background video
         img_frames = int(2.0 * fps)
         vid_duration = duration - 2.0
         
         zoom_speed = "0.002" if is_hook else "0.001"
         max_zoom = "1.15" if is_hook else "1.12"
         
-        img_loop_flag = "-stream_loop" if img_path.lower().endswith('.mp4') else "-loop"
-        img_loop_val = "-1" if img_path.lower().endswith('.mp4') else "1"
-        
         command = [
             "ffmpeg", "-y",
-            img_loop_flag, img_loop_val, "-i", img_path,
+            "-loop", "1", "-i", img_path,
             "-stream_loop", "-1", "-i", vid_path,
             "-t", str(duration),
             "-filter_complex",

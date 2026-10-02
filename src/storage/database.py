@@ -3,6 +3,7 @@ import sqlite3
 import time
 import logging
 import re
+import json
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "tweets.db")
 
@@ -45,6 +46,9 @@ def init_db():
             
         if "story_count" not in columns:
             conn.execute("ALTER TABLE tweets ADD COLUMN story_count INTEGER DEFAULT 1")
+            
+        if "media" not in columns:
+            conn.execute("ALTER TABLE tweets ADD COLUMN media TEXT DEFAULT '[]'")
         
         conn.commit()
         logging.info("Tweet database initialized.")
@@ -99,11 +103,12 @@ def insert_tweet(tweet_dict):
     """
     conn = _get_connection()
     try:
+        media_json = json.dumps(tweet_dict.get("media", []))
         conn.execute(
             """
             INSERT OR IGNORE INTO tweets
-                (tweet_id, author, category, text, created_at, inserted_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (tweet_id, author, category, text, created_at, inserted_at, media)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(tweet_dict["tweet_id"]),
@@ -112,6 +117,7 @@ def insert_tweet(tweet_dict):
                 tweet_dict.get("text", ""),
                 str(tweet_dict.get("created_at", "")),
                 time.time(),
+                media_json,
             ),
         )
         conn.commit()
@@ -164,7 +170,7 @@ def get_pending_tweet_for_category(category):
     try:
         row = conn.execute(
             """
-            SELECT tweet_id, text, author, created_at, category, story_count FROM tweets 
+            SELECT tweet_id, text, author, created_at, category, story_count, media FROM tweets 
             WHERE category = ? AND status = 'pending'
             ORDER BY story_count DESC, inserted_at DESC LIMIT 1
             """, 
@@ -174,7 +180,12 @@ def get_pending_tweet_for_category(category):
         if row:
             conn.execute("UPDATE tweets SET status = 'processing' WHERE tweet_id = ?", (row["tweet_id"],))
             conn.commit()
-            return dict(row)
+            d = dict(row)
+            try:
+                d["media"] = json.loads(d.get("media") or "[]")
+            except Exception:
+                d["media"] = []
+            return d
         return None
     finally:
         conn.close()

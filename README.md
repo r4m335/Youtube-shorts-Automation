@@ -1,12 +1,12 @@
 # Fully Autonomous YouTube Shorts Automation
 
-A production-ready, fully autonomous Python pipeline that monitors real-time news from X (Twitter) via Playwright browser scraping, generates scripts with LLM, voices them with Edge TTS, renders vertical video with FFmpeg, and uploads to multiple YouTube channels — completely hands-free.
+A production-ready, fully autonomous Python pipeline that monitors real-time news from X (Twitter) via a hybrid twscrape + Playwright browser engine, generates scripts with LLM, voices them with Edge TTS, renders vertical video with FFmpeg, and uploads to multiple YouTube channels — completely hands-free.
 
 ---
 
 ## 🚀 Features
 
-* **Real-Time X (Twitter) Monitoring (Playwright)**: Scrapes curated X accounts across multiple niches (**Sports, World News, Tech, Anime, CDrama**) using headless Playwright browser — no API fees, no unofficial wrappers.
+* **Hybrid Real-Time X (Twitter) Monitoring**: Dual-engine ingestion using lightning-fast **twscrape** as the primary choice (with full Twitter media extraction) and headless **Playwright** browser as an automatic fallback — zero API fees, high-speed ingestion, and complete failure resilience.
 * **5-Minute Continuous Scheduler**: Runs as a `while True` loop with automated ingestion, smart scraping (only scrapes categories with empty backlogs), and failure recovery.
 * **Multi-Channel Auto-Routing**: Dynamically routes uploads to separate YouTube channels based on topic category using isolated per-channel OAuth tokens:
   | Channel | Categories |
@@ -23,10 +23,10 @@ A production-ready, fully autonomous Python pipeline that monitors real-time new
 * **Intelligent Visual Fetching & 8-Source Fallback Chain**:
   1. Article `og:image` / `twitter:image` scraping (from URLs in tweets + DuckDuckGo article discovery)
   2. Wikipedia / Wikimedia Commons
-  3. TMDB (movies/shows/actors)
+  3. DuckDuckGo Images
   4. Bing Image Search
-  5. SerpAPI Google Images
-  6. DuckDuckGo Images
+  5. TMDB (movies/shows/actors)
+  6. SerpAPI Google Images
   7. Stability AI (AI-generated visuals)
   8. Pexels / Pixabay (stock fallback)
 * **Gemini Vision Safety Check**: Every fetched image is verified for NSFW content and topic relevance using Gemini 3.5 Flash Vision before use.

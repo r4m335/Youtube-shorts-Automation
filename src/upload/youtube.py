@@ -174,7 +174,7 @@ def upload_video(file_path, title, description, tags, category, privacy_status="
                 ).execute()
                 logging.info(f"Custom thumbnail uploaded for video '{video_id}'.")
             except Exception as e:
-                logging.error(f"Failed to upload custom thumbnail: {e}")
+                logging.warning(f"Could not upload custom thumbnail (channel may need phone verification for custom thumbnails): {e}")
 
         return video_id
     except Exception as e:

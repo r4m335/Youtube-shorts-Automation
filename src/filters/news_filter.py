@@ -62,18 +62,27 @@ def pre_filter(tweets, max_age_hours=24):
             stats["retweets"] += 1
             continue
 
-        # Skip very short tweets or single-sentence tweets (ONLY for 'sports' category)
+        # Skip very short tweets across ALL categories (must have at least 11 chars of real content)
+        clean_text = re.sub(r"https?://\S+", "", text).strip()
+        if len(clean_text) < 11:
+            stats["short"] += 1
+            continue
+
+        # Skip single-sentence tweets (specifically for 'sports' category)
         if tweet.get("category") == "sports":
-            clean_text = re.sub(r"https?://\S+", "", text).strip()
-            
             # Count sentences by splitting on punctuation. Filter out empty/tiny fragments.
             sentences = [s for s in re.split(r'[.!?]+', clean_text) if len(s.strip()) > 5]
-            
-            if len(sentences) <= 1 or len(clean_text) < 30:
+            if len(sentences) <= 1:
                 stats["short"] += 1
                 continue
 
         # Skip tweets whose posting timestamp is older than max_age_hours
+        # For 'Cdrama', allow up to 3 days (72 hours); other categories use max_age_hours (default: 24h)
+        cat = str(tweet.get("category", "")).lower()
+        author = str(tweet.get("author", "") or tweet.get("username", "")).lower()
+        effective_max_age = 72 if (cat == "cdrama" or author == "forcdrama") else max_age_hours
+        cat_cutoff = now - timedelta(hours=effective_max_age)
+
         created_at = tweet.get("created_at", "")
         if created_at:
             try:
@@ -83,7 +92,7 @@ def pre_filter(tweets, max_age_hours=24):
                     tweet_time = created_at
                 if tweet_time.tzinfo is None:
                     tweet_time = tweet_time.replace(tzinfo=timezone.utc)
-                if tweet_time < cutoff:
+                if tweet_time < cat_cutoff:
                     stats["old"] += 1
                     continue
             except (ValueError, TypeError):

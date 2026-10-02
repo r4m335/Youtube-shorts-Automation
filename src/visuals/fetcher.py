@@ -173,14 +173,22 @@ GENERIC_NOISE_WORDS = {
     "this", "that", "these", "those", "here", "there", "what", "when", "where", "which", "who",
     "today", "yesterday", "tomorrow", "video", "shorts", "youtube", "breaking", "report",
     "reports", "sparks", "rumors", "rumour", "rumours", "news", "update", "updates",
-    "netizens", "fans", "people", "everyone", "someone", "business", "car", "deal", "official"
+    "netizens", "fans", "people", "everyone", "someone", "business", "car", "deal", "official",
+    "record", "promo", "song", "track", "album", "music", "audio", "single",
+    "hello", "saturday", "sunday", "monday", "tuesday", "wednesday", "thursday", "friday",
+    "whoa", "wow", "look", "watch", "check", "confirmed", "confirm", "confirms",
+    "meanwhile", "furthermore", "moreover", "however", "additionally", "already", "just", "also", "finally",
+    "trailer", "teaser", "poster", "drama", "series", "season", "episode", "episodes",
+    "gala", "awards", "ceremony", "festival", "show", "guest", "list", "stars", "starring",
+    "lead", "leads", "cast", "shooting", "shoots", "begins", "release", "releases"
 }
 
 
 def extract_visual_keywords(line, topic=""):
     """
     Extract search queries from topic and line using full title and actor/player names.
-    Avoids arbitrary word-length sorting that picks generic nouns like 'Business'.
+    Extracts both spaced names (e.g. 'Chen Feiyu') and CamelCase names (e.g. 'MengZiyi' -> 'Meng Ziyi'),
+    prioritizing actors if full topic title image search fails.
     """
     queries = []
     
@@ -189,30 +197,46 @@ def extract_visual_keywords(line, topic=""):
     if clean_topic and len(clean_topic.split()) >= 2:
         queries.append(clean_topic)
         
-    # 2. Extract Multi-word Proper Names (e.g. "Chen Feiyu", "Sun Qian", "Wang Yibo")
     combined = f"{topic} {line}"
-    name_patterns = re.findall(r'\b[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+)+\b', combined)
     valid_names = []
+
+    # 2a. Extract CamelCase Names (e.g. "MengZiyi" -> "Meng Ziyi", "LiYunrui" -> "Li Yunrui", "WangYibo" -> "Wang Yibo")
+    camel_tokens = re.findall(r'\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b', combined)
+    for ct in camel_tokens:
+        spaced = re.sub(r'([a-z])([A-Z])', r'\1 \2', ct)
+        words = spaced.split()
+        if not any(w.lower() in GENERIC_NOISE_WORDS for w in words):
+            if spaced not in valid_names:
+                valid_names.append(spaced)
+
+    # 2b. Extract Spaced Multi-word Names (e.g. "Chen Feiyu", "Sun Qian", "Dylan Wang")
+    name_patterns = re.findall(r'\b[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+(?:\s+[A-Z\u00C0-\u017F][a-z\u00C0-\u017F]+)+\b', combined)
     for name in name_patterns:
         words = name.split()
         if not any(w.lower() in GENERIC_NOISE_WORDS for w in words):
             if name not in valid_names:
                 valid_names.append(name)
                 
-    if valid_names:
-        for name in valid_names:
+    # If the current line mentions one of the valid names specifically, prioritize that actor!
+    line_lower = line.lower()
+    line_specific_names = [n for n in valid_names if n.lower() in line_lower or n.replace(" ", "").lower() in line_lower]
+    other_names = [n for n in valid_names if n not in line_specific_names]
+    ordered_names = line_specific_names + other_names
+
+    if ordered_names:
+        for name in ordered_names:
             photo_q = f"{name} photo"
             if photo_q not in queries:
                 queries.append(photo_q)
             if name not in queries:
                 queries.append(name)
                 
-    # 3. Clean line proper nouns (specific to this line)
+    # 3. Clean line proper nouns (specific to this line, if multi-word and not noise)
     line_words = "".join(c for c in line if c.isalnum() or c.isspace()).split()
     line_proper = [w for w in line_words if w[0].isupper() and w.lower() not in STOPWORDS and w.lower() not in GENERIC_NOISE_WORDS]
     if line_proper:
         lp_query = " ".join(dict.fromkeys(line_proper[:3]))
-        if lp_query and lp_query not in queries:
+        if lp_query and lp_query not in queries and len(lp_query.split()) >= 2:
             queries.append(lp_query)
             
     if not queries:
@@ -303,13 +327,27 @@ def download_tweet_media(media_urls, temp_dir, index):
 def _search_web_articles_and_snippets(query, limit=5):
     """
     Searches the web for articles and snippets about a query.
-    1. Primary: Bing Web Search (unwraps redirect URLs, fast, reliable)
-    2. Fallback: DuckDuckGo via modern ddgs package
+    1. Primary: DuckDuckGo via modern ddgs package (better news article URLs)
+    2. Fallback: Bing Web Search (unwraps redirect URLs)
     Returns a list of dicts: [{'url': ..., 'snippet': ...}, ...]
     """
     results = []
     
-    # 1. Bing Web Search (Primary)
+    # 1. DuckDuckGo via ddgs package (Primary — better for news articles)
+    try:
+        from ddgs import DDGS
+        for r in DDGS().text(query, max_results=limit):
+            href = r.get("href")
+            snippet = r.get("body", "")
+            if href and href.startswith("http"):
+                results.append({"url": href, "snippet": snippet})
+        if results:
+            logging.info(f"DDGS search discovered {len(results)} results for '{query[:30]}...'")
+            return results
+    except Exception as e:
+        logging.warning(f"DDGS search failed for '{query[:30]}...': {e}")
+    
+    # 2. Bing Web Search (Fallback)
     try:
         import base64
         from bs4 import BeautifulSoup
@@ -344,21 +382,7 @@ def _search_web_articles_and_snippets(query, limit=5):
                 logging.info(f"Bing Search discovered {len(results)} results for '{query[:30]}...'")
                 return results
     except Exception as e:
-        logging.warning(f"Bing search failed for '{query[:30]}...': {e}")
-        
-    # 2. DuckDuckGo via ddgs package (Fallback)
-    try:
-        from ddgs import DDGS
-        for r in DDGS().text(query, max_results=limit):
-            href = r.get("href")
-            snippet = r.get("body", "")
-            if href and href.startswith("http"):
-                results.append({"url": href, "snippet": snippet})
-        if results:
-            logging.info(f"DDGS search discovered {len(results)} results for '{query[:30]}...'")
-            return results
-    except Exception as e:
-        logging.warning(f"DDGS search fallback failed for '{query[:30]}...': {e}")
+        logging.warning(f"Bing search fallback failed for '{query[:30]}...': {e}")
         
     return results
 
@@ -374,8 +398,14 @@ def discover_articles(topic, limit=5):
 
 def scrape_article_images(urls, temp_dir):
     """
-    Scrapes the provided URLs for their og:image or twitter:image.
+    Scrapes the provided URLs for their og:image, twitter:image, or hero image.
     Downloads them to temp_dir and returns a list of valid image paths.
+    
+    Multi-strategy approach:
+    1. og:image meta tag
+    2. twitter:image meta tag (both name= and property= variants)
+    3. article:image / schema.org image meta tags
+    4. CSS hero image selectors (large <img> in article body)
     """
     try:
         from bs4 import BeautifulSoup
@@ -389,48 +419,113 @@ def scrape_article_images(urls, temp_dir):
         try:
             # Mask as a regular browser to avoid blocks
             headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
             }
-            r = requests.get(url, headers=headers, timeout=10)
+            r = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
             if r.status_code != 200:
+                logging.warning(f"Article scrape HTTP {r.status_code} for {url[:60]}")
                 continue
                 
+            def _is_usable_candidate(cand):
+                if not cand or not isinstance(cand, str):
+                    return False
+                cand_lower = cand.lower()
+                if cand_lower.endswith(".svg"):
+                    return False
+                disallowed = ["logo", "icon", "favicon", "avatar", "placeholder", "badge", "spacer.gif", "pixel.gif", "spinner"]
+                if any(d in cand_lower for d in disallowed):
+                    return False
+                return True
+
             soup = BeautifulSoup(r.content, 'html.parser')
             img_url = None
             
-            # Look for standard metadata images
+            # Strategy 1: og:image meta tag (most common)
             og_img = soup.find("meta", property="og:image")
-            if og_img and og_img.get("content"):
+            if og_img and _is_usable_candidate(og_img.get("content")):
                 img_url = og_img["content"]
-            else:
+            
+            # Strategy 2: twitter:image (name= variant)
+            if not img_url:
                 tw_img = soup.find("meta", attrs={"name": "twitter:image"})
-                if tw_img and tw_img.get("content"):
+                if tw_img and _is_usable_candidate(tw_img.get("content")):
                     img_url = tw_img["content"]
             
+            # Strategy 3: twitter:image (property= variant — some sites use this)
             if not img_url:
+                tw_img2 = soup.find("meta", property="twitter:image")
+                if tw_img2 and _is_usable_candidate(tw_img2.get("content")):
+                    img_url = tw_img2["content"]
+            
+            # Strategy 4: twitter:image:src variant
+            if not img_url:
+                tw_img3 = soup.find("meta", attrs={"name": "twitter:image:src"})
+                if tw_img3 and _is_usable_candidate(tw_img3.get("content")):
+                    img_url = tw_img3["content"]
+                    
+            # Strategy 5: Schema.org / article thumbnail
+            if not img_url:
+                schema_img = soup.find("meta", attrs={"itemprop": "image"})
+                if schema_img and _is_usable_candidate(schema_img.get("content")):
+                    img_url = schema_img["content"]
+            
+            # Strategy 6: CSS hero image selectors (look for large images in the article body)
+            if not img_url:
+                hero_selectors = [
+                    "article img",
+                    ".article-hero img",
+                    ".hero-image img",
+                    ".featured-image img",
+                    ".post-thumbnail img",
+                    ".entry-content img",
+                    "[class*='hero'] img",
+                    "[class*='featured'] img",
+                    "figure img",
+                    ".lead-media img",
+                ]
+                for selector in hero_selectors:
+                    for found in soup.select(selector):
+                        candidate = found.get("src") or found.get("data-src") or found.get("data-lazy-src")
+                        if _is_usable_candidate(candidate):
+                            img_url = candidate
+                            break
+                    if img_url:
+                        break
+
+            
+            if not img_url:
+                logging.debug(f"No image meta tags or hero images found for {url[:60]}")
                 continue
                 
             # Handle relative URLs or missing schemes
+            from urllib.parse import urljoin
             if img_url.startswith("//"):
                 img_url = "https:" + img_url
             elif img_url.startswith("/"):
-                from urllib.parse import urljoin
+                img_url = urljoin(url, img_url)
+            elif not img_url.startswith("http"):
                 img_url = urljoin(url, img_url)
                 
             # Download the image
-            ir = requests.get(img_url, headers=headers, timeout=10)
-            if ir.status_code == 200 and len(ir.content) > 5000: # Ensure it's a real image, not tiny icon
-                from src.visuals.fetcher import is_valid_image # Use existing helper
+            ir = requests.get(img_url, headers=headers, timeout=15, allow_redirects=True)
+            if ir.status_code == 200 and len(ir.content) > 5000:  # Ensure it's a real image, not tiny icon
                 if is_valid_image(ir.content):
                     out_path = os.path.join(temp_dir, f"article_img_{i}_{hash(url) % 10000}.jpg")
                     with open(out_path, "wb") as f:
                         f.write(ir.content)
                     downloaded_paths.append(out_path)
-                    logging.info(f"Successfully scraped article image from {url[:40]}...")
+                    logging.info(f"Scraped article image ({len(ir.content)//1024}KB) from {url[:60]}")
+                else:
+                    logging.warning(f"Downloaded content is not a valid image from {url[:60]}")
+            else:
+                logging.warning(f"Article image download failed (status={ir.status_code}, size={len(ir.content) if ir.status_code == 200 else 'N/A'}) from {img_url[:60]}")
                     
         except Exception as e:
-            logging.warning(f"Failed to scrape article image from {url}: {e}")
-            
+            logging.warning(f"Failed to scrape article image from {url[:60]}: {e}")
+    
+    logging.info(f"Article image scraping complete: {len(downloaded_paths)}/{len(urls)} URLs yielded images")
     return downloaded_paths
 
 
@@ -522,14 +617,15 @@ def fetch_image_wikimedia(keyword, output_path):
     Best for named people (players, politicians, CEOs), landmarks, logos, movies.
     """
     try:
+        search_url = "https://en.wikipedia.org/w/api.php"
         headers = {
             "User-Agent": "YTShortsAutomation/1.0 (https://github.com/r4m335/Youtube-shorts-Automation; dotproduct456@gmail.com)"
         }
-        search_url = "https://en.wikipedia.org/w/api.php"
+        clean_kw = re.sub(r'\s+(photo|news|picture|image|images|headshot)\b', '', keyword, flags=re.IGNORECASE).strip()
         params = {
             "action": "query",
             "format": "json",
-            "titles": keyword,
+            "titles": clean_kw or keyword,
             "prop": "pageimages",
             "pithumbsize": "800",
             "redirects": "1"
@@ -596,18 +692,24 @@ def fetch_image_duckduckgo(keyword, output_path):
 # ---------------------------------------------------------------------------
 # Source 6: TMDB (movie posters, actor photos — for cinema category)
 # ---------------------------------------------------------------------------
+_TMDB_UNAVAILABLE = False
+
 def fetch_image_tmdb(keyword, output_path):
     """
     Searches TMDB for movie/TV show posters and actor photos.
     Best for cinema/entertainment topics.
     """
+    global _TMDB_UNAVAILABLE
+    if _TMDB_UNAVAILABLE:
+        return False
+
     api_key = os.getenv("TMDB_API_KEY")
     if not api_key:
         return False
     
     try:
         url = f"https://api.themoviedb.org/3/search/multi?api_key={api_key}&query={keyword}&page=1"
-        response = requests.get(url, timeout=15)
+        response = requests.get(url, timeout=4)
         response.raise_for_status()
         data = response.json()
         
@@ -621,7 +723,7 @@ def fetch_image_tmdb(keyword, output_path):
                 )
                 if img_path:
                     img_url = f"https://image.tmdb.org/t/p/w780{img_path}"
-                    img_response = requests.get(img_url, timeout=10)
+                    img_response = requests.get(img_url, timeout=5)
                     img_response.raise_for_status()
                     
                     if len(img_response.content) > 2000 and is_valid_image(img_response.content):
@@ -629,6 +731,9 @@ def fetch_image_tmdb(keyword, output_path):
                             f.write(img_response.content)
                         logging.info(f"TMDB image downloaded for '{keyword}': {result.get('title') or result.get('name')}")
                         return True
+    except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
+        logging.warning(f"TMDB connection timed out or unreachable ({e}). Disabling TMDB for this session.")
+        _TMDB_UNAVAILABLE = True
     except Exception as e:
         logging.warning(f"TMDB image search failed for '{keyword}': {e}")
     return False
@@ -686,7 +791,7 @@ def fetch_video_pexels(keyword, output_path):
     headers = {"Authorization": api_key}
     
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         data = response.json()
         if data.get("videos"):
@@ -697,9 +802,13 @@ def fetch_video_pexels(keyword, output_path):
             
             if target_file and target_file.get("link"):
                 vid_url = target_file["link"]
-                vid_data = requests.get(vid_url).content
-                with open(output_path, "wb") as f:
-                    f.write(vid_data)
+                with requests.get(vid_url, stream=True, timeout=25) as vr:
+                    vr.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in vr.iter_content(chunk_size=65536):
+                            if chunk:
+                                f.write(chunk)
+                logging.info(f"Pexels video downloaded for '{keyword}'")
                 return True
     except Exception as e:
         logging.error(f"Pexels video fetch failed for {keyword}: {e}")
@@ -776,14 +885,22 @@ def fetch_video_pixabay(keyword, output_path):
         data = r.json()
         hits = data.get("hits", [])
         if hits:
-            # Sort by highest resolution portrait or just take first
             chosen = hits[0]
-            vid_url = chosen.get("videos", {}).get("large", {}).get("url") or chosen.get("videos", {}).get("medium", {}).get("url")
+            vids = chosen.get("videos", {})
+            # Prioritize tiny (720x1280) or small (1080x1920) for blazing fast download, fallback to medium or large
+            vid_url = (
+                vids.get("tiny", {}).get("url") or
+                vids.get("small", {}).get("url") or
+                vids.get("medium", {}).get("url") or
+                vids.get("large", {}).get("url")
+            )
             if vid_url:
-                vr = requests.get(vid_url, timeout=15)
-                vr.raise_for_status()
-                with open(output_path, "wb") as f:
-                    f.write(vr.content)
+                with requests.get(vid_url, stream=True, timeout=25) as vr:
+                    vr.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        for chunk in vr.iter_content(chunk_size=65536):
+                            if chunk:
+                                f.write(chunk)
                 logging.info(f"Pixabay video downloaded for '{keyword}'")
                 return True
     except Exception as e:
@@ -820,108 +937,158 @@ def fetch_image_pixabay(keyword, output_path):
 
 def get_visual_for_line(line, temp_dir, index, topic="", tweet_media_urls=None, category="", article_image=None):
     """
-    Fetches the best visual for a script line using a multi-source priority chain.
+    Fetches the best visual for a script line.
     
-    Priority chain:
-    1. Tweet media
-    2. Article URL -> og:image
-    3. Wikipedia
-    4. TMDB
-    5. DuckDuckGo Images (superior entity recognition for Asian names)
-    6. Bing Images
-    7. Google (SerpAPI)
-    8. Stability AI
-    9. AI-generated image
+    Category routing:
+    - 'world' category: Full visual API pipeline (Tweet media, Article images, Wikipedia, TMDB,
+      DuckDuckGo, Bing, SerpAPI, Pexels video/images, Pixabay video/images, Unsplash, Stability AI).
+      Supports hybrid image + background video.
+    - All other categories (sports, Cdrama, Tech, Anime, etc.): STRICT on-topic only (tweet media & article hero images).
     """
-    # Priority 1: Tweet media image (always most relevant)
+    is_world = str(category).lower() == "world"
+
+    # =========================================================================
+    # Mode 1: Non-World categories (Strict on-topic only: Tweet media & Article images)
+    # =========================================================================
+    if not is_world:
+        # Priority 1: Tweet media image (always most relevant — real news image from tweet)
+        if tweet_media_urls:
+            tweet_visual = download_tweet_media(tweet_media_urls, temp_dir, index)
+            if tweet_visual:
+                logging.info(f"Using tweet media image for line {index}")
+                return tweet_visual, None
+        
+        # Priority 2: Scraped article image (og:image from related news articles)
+        jpg_path = os.path.join(temp_dir, f"visual_{index}.jpg")
+        if article_image and os.path.exists(article_image):
+            import shutil
+            shutil.copy2(article_image, jpg_path)
+            logging.info(f"Using scraped article image for line {index}: {article_image}")
+            return jpg_path, None
+        
+        # BOTH sources failed — fail the pipeline immediately for non-world categories
+        logging.error(
+            f"VISUAL PIPELINE FAILED for line {index}: No tweet media and no article image available. "
+            f"Topic: '{topic}'. This line has no on-topic visual — aborting."
+        )
+        return None, None
+
+    # =========================================================================
+    # Mode 2: World News (Full Multi-Source API Pipeline with Video & Images)
+    # =========================================================================
+    jpg_path = os.path.join(temp_dir, f"visual_{index}.jpg")
+
+    # Priority 1: Tweet media image
     if tweet_media_urls:
         tweet_visual = download_tweet_media(tweet_media_urls, temp_dir, index)
         if tweet_visual:
-            # Also try to fetch a background video for tweet media
             bg_video = None
             query_for_vid = generate_smart_search_query(line, topic, category)
             mp4_path = os.path.join(temp_dir, f"bg_video_{index}.mp4")
-            if fetch_video_pexels(query_for_vid, mp4_path):
+            if fetch_video_pexels(query_for_vid, mp4_path) or fetch_video_pixabay(query_for_vid, mp4_path):
                 bg_video = mp4_path
             return tweet_visual, bg_video
-    
+
     # Priority 1.5: Scraped article image
-    jpg_path = os.path.join(temp_dir, f"visual_{index}.jpg")
     if article_image and os.path.exists(article_image):
         import shutil
         shutil.copy2(article_image, jpg_path)
-        logging.info(f"Using scraped article image for line {index}: {article_image}")
-        return jpg_path, None
-    
-    # Generate search queries: Full Title & individual actor names (primary) + LLM smart query (fallback)
+        bg_video = None
+        query_for_vid = generate_smart_search_query(line, topic, category)
+        mp4_path = os.path.join(temp_dir, f"bg_video_{index}.mp4")
+        if fetch_video_pexels(query_for_vid, mp4_path) or fetch_video_pixabay(query_for_vid, mp4_path):
+            bg_video = mp4_path
+        logging.info(f"World News: Using scraped article image for line {index}: {article_image}")
+        return jpg_path, bg_video
+
+    # Build ordered list of queries: extracted keywords + smart LLM query
     fallback_keywords = extract_visual_keywords(line, topic)
     smart_query = generate_smart_search_query(line, topic, category)
-    
-    # Build ordered list of queries: Full Title & actor names FIRST, then smart_query
     all_queries = []
     for kw in fallback_keywords:
         if kw and kw not in all_queries:
             all_queries.append(kw)
     if smart_query and not any(smart_query.lower() == q.lower() for q in all_queries):
         all_queries.append(smart_query)
-    
+
     primary_image = None
-    
-    # Priority 3: Wikipedia / Wikimedia
+
+    # Priority 2: Wikipedia / Wikimedia
     for query in all_queries:
         if fetch_image_wikimedia(query, jpg_path):
             primary_image = jpg_path
             break
-            
-    # Priority 4: TMDB (for cinema/entertainment categories)
+
+    # Priority 3: TMDB (entertainment / world cinema)
     if not primary_image:
-        cat_lower = category.lower() if category else ""
-        if cat_lower in ("cinema", "entertainment", "anime", "drama", "cdrama", ""):
-            for query in all_queries:
-                if fetch_image_tmdb(query, jpg_path):
-                    primary_image = jpg_path
-                    break
-                    
-    # Priority 5: DuckDuckGo Images (ahead of Bing — superior name entity recognition)
+        for query in all_queries:
+            if fetch_image_tmdb(query, jpg_path):
+                primary_image = jpg_path
+                break
+
+    # Priority 4: DuckDuckGo Images
     if not primary_image:
         for query in all_queries:
             if fetch_image_duckduckgo(query, jpg_path):
                 primary_image = jpg_path
                 break
 
-    # Priority 6: Bing Image Search
+    # Priority 5: Bing Images
     if not primary_image:
         for query in all_queries:
             if fetch_image_bing(query, jpg_path):
                 primary_image = jpg_path
                 break
-                
-    # Priority 7: SerpAPI Google Images
+
+    # Priority 6: SerpAPI Google Images
     if not primary_image:
         for query in all_queries:
             if fetch_image_serpapi(query, jpg_path):
                 primary_image = jpg_path
                 break
-                
-    # Priority 8: Stability AI
+
+    # Priority 7: Pexels Image
     if not primary_image:
-        logging.info(f"Generating AI visual for '{smart_query}'...")
+        for query in all_queries:
+            if fetch_image_pexels(query, jpg_path):
+                primary_image = jpg_path
+                break
+
+    # Priority 8: Pixabay Image
+    if not primary_image:
+        for query in all_queries:
+            if fetch_image_pixabay(query, jpg_path):
+                primary_image = jpg_path
+                break
+
+    # Priority 9: Unsplash Image
+    if not primary_image:
+        for query in all_queries:
+            if fetch_image_unsplash(query, jpg_path):
+                primary_image = jpg_path
+                break
+
+    # Priority 10: Stability AI (Generated Visual)
+    if not primary_image:
+        logging.info(f"World News: Generating AI visual for '{smart_query}'...")
         ai_path = os.path.join(temp_dir, f"ai_visual_{index}.jpg")
         if fetch_image_stability(smart_query, ai_path):
             primary_image = ai_path
-    
+
     if not primary_image:
-        logging.warning(f"Could not fetch ANY visual for: {all_queries}")
+        logging.warning(f"World News: Could not fetch ANY visual for: {all_queries}")
         return None, None
-    
-    # Also fetch a Pexels video clip for the background (image shows first 2s, then video plays)
+
+    # Fetch background video clip (Pexels, then Pixabay)
     bg_video = None
     mp4_path = os.path.join(temp_dir, f"bg_video_{index}.mp4")
     for query in all_queries:
-        if fetch_video_pexels(query, mp4_path):
+        if fetch_video_pexels(query, mp4_path) or fetch_video_pixabay(query, mp4_path):
             bg_video = mp4_path
             break
+
     return primary_image, bg_video
+
 
 
 # ---------------------------------------------------------------------------

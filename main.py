@@ -125,7 +125,7 @@ def process_single_topic(topic, category, tweet_media_urls=None, tweet_text=""):
         audio_files = []
         image_files = []
         
-        # Pre-fetch article images pool based on user's hybrid pipeline
+        # Pre-fetch article images pool (MANDATORY — pipeline fails without images)
         article_image_pool = []
         
         # 1. Extract URLs from the tweet text and topic
@@ -135,13 +135,23 @@ def process_single_topic(topic, category, tweet_media_urls=None, tweet_text=""):
         if topic_urls:
             article_image_pool.extend(scrape_article_images(topic_urls, temp_dir))
             
-        # 2. LLM finds related articles
-        if len(article_image_pool) < 3:
-            llm_urls = discover_articles(topic, limit=3)
+        # 2. Discover and scrape related articles (aggressive — fetch more)
+        if len(article_image_pool) < len(lines):
+            llm_urls = discover_articles(topic, limit=8)
             if llm_urls:
                 article_image_pool.extend(scrape_article_images(llm_urls, temp_dir))
-                
         
+        # STRICT CHECK: If we have NO article images AND NO tweet media, abort immediately (except for world news which uses full visual API chain)
+        has_tweet_media = bool(tweet_media_urls)
+        is_world_news = (str(category).lower() == "world")
+        if not is_world_news and not article_image_pool and not has_tweet_media:
+            logging.error(
+                f"PIPELINE ABORTED: No article images could be scraped and no tweet media available for topic '{topic}'. "
+                f"Cannot produce on-topic visuals — refusing to use unrelated stock content."
+            )
+            return False
+        
+        logging.info(f"Visual pool: {len(article_image_pool)} article images, tweet_media={'yes' if has_tweet_media else 'no'}, is_world_news={is_world_news}")
 
         for i, line in enumerate(lines):
             logging.info(f"Processing line {i+1}/{len(lines)}...")
@@ -153,8 +163,8 @@ def process_single_topic(topic, category, tweet_media_urls=None, tweet_text=""):
             if not process_audio(raw_audio, proc_audio, speed=1.1, silence_gap=0.3): return False
             audio_files.append(proc_audio)
             
-            # Visual — use tweet media for first line if available
-            line_media = tweet_media_urls if (i == 0 and tweet_media_urls) else None
+            # Visual — use tweet media for ALL lines (not just first)
+            line_media = tweet_media_urls if tweet_media_urls else None
             
             art_img = None
             # 1. Try to use a unique article image first
@@ -164,11 +174,16 @@ def process_single_topic(topic, category, tweet_media_urls=None, tweet_text=""):
             elif article_image_pool:
                 art_img = article_image_pool[i % len(article_image_pool)]
                     
-            visual_path = get_visual_for_line(line, temp_dir, i, topic=topic, tweet_media_urls=line_media, category=category, article_image=art_img)
-            if not visual_path:
-                logging.error("Failed to fetch visual. Aborting topic.")
+            visual_result = get_visual_for_line(line, temp_dir, i, topic=topic, tweet_media_urls=line_media, category=category, article_image=art_img)
+            if not visual_result or not visual_result[0]:
+                logging.error(f"Failed to fetch on-topic visual for line {i+1}. Aborting topic.")
                 return False
-            image_files.append(visual_path)
+            
+            # For world news: keep the tuple (img, bg_video) if bg_video exists for hybrid rendering
+            if is_world_news and visual_result[1]:
+                image_files.append(visual_result)
+            else:
+                image_files.append(visual_result[0])
             
         # 3. Combine Audio
         full_audio = os.path.join(temp_dir, "full_audio.wav")
@@ -203,11 +218,9 @@ def process_single_topic(topic, category, tweet_media_urls=None, tweet_text=""):
         thumb_path = os.path.join(temp_dir, "thumbnail.jpg")
         hook_keyword = extract_keyword(lines[0])
         
-        # image_files[0] might be a tuple (img, vid) or just a string
-        first_vis = image_files[0]
-        primary_img_path = first_vis[0] if isinstance(first_vis, tuple) else first_vis
-        
-        generate_thumbnail(primary_img_path, hook_keyword.upper(), thumb_path)
+        # If image_files[0] is a tuple (img_path, vid_path), use the primary image
+        thumb_source = image_files[0][0] if isinstance(image_files[0], tuple) else image_files[0]
+        generate_thumbnail(thumb_source, hook_keyword.upper(), thumb_path)
         
         # 8. Upload
         title, desc, tags = generate_metadata(topic, lines[0], script_lines=lines)
@@ -385,7 +398,9 @@ def main():
                             
                             topic = valid_topics[0]
                             logging.info(f"Generating video for topic: '{topic}'")
-                            best_tweet_media = None
+                            best_tweet_media = tweet.get("media") or None
+                            if best_tweet_media:
+                                logging.info(f"Using {len(best_tweet_media)} real Twitter media URL(s) for topic: '{topic}'")
                             
                             if process_single_topic(topic, category, tweet_media_urls=best_tweet_media, tweet_text=tweet.get("text", "")):
                                 channel_success += 1

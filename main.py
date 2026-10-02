@@ -244,16 +244,26 @@ SCHEDULER_INTERVAL = 300  # 5 minutes in seconds
 
 
 def main():
+    channels = get_all_channels()
+    available_channel_names = list(channels.keys())
+
     parser = argparse.ArgumentParser(description="YouTube Shorts Automation Pipeline")
-    parser.add_argument("--skip-channel", action="append", default=[], help="Skip processing for a specific channel (e.g. entertainment). Can be used multiple times.")
+    parser.add_argument("--channel", type=str, default=None, choices=available_channel_names, help=f"Run pipeline for ONLY this specific channel (choices: {', '.join(available_channel_names)}).")
+    parser.add_argument("--category", type=str, default=None, help="Run pipeline for ONLY this specific category (e.g. world, Tech, Cdrama, sports, Anime).")
+    parser.add_argument("--skip-channel", action="append", default=[], help="Skip processing for a specific channel. Can be used multiple times.")
     parser.add_argument("--max-videos", type=int, default=32, help="Stop pipeline automatically after uploading this many videos (default: 32)")
+    parser.add_argument("--once", action="store_true", help="Run a single cycle and exit (do not loop in continuous scheduler mode).")
     args = parser.parse_args()
 
     MAX_TOTAL_VIDEOS = args.max_videos
 
     logging.info("=" * 60)
-    logging.info("Starting YouTube Shorts Pipeline — Continuous Scheduler Mode")
-    logging.info(f"Cycle interval: {SCHEDULER_INTERVAL // 60} minutes")
+    mode_str = "Single Cycle Mode (--once)" if args.once else f"Continuous Scheduler Mode (interval: {SCHEDULER_INTERVAL // 60} min)"
+    logging.info(f"Starting YouTube Shorts Pipeline — {mode_str}")
+    if args.channel:
+        logging.info(f"Targeting single channel: '{args.channel}' (categories: {channels[args.channel].get('categories', [])})")
+    if args.category:
+        logging.info(f"Targeting single category: '{args.category}'")
     logging.info(f"Max video upload target: {MAX_TOTAL_VIDEOS}")
     if args.skip_channel:
         logging.info(f"Skipping channels: {args.skip_channel}")
@@ -298,11 +308,24 @@ def main():
             accounts = load_accounts()
             active_categories = list(accounts.keys()) if accounts else []
             
+            # Filter active_categories if a specific channel or category is targeted
+            if args.category:
+                active_categories = [cat for cat in active_categories if cat.lower() == args.category.lower()]
+            elif args.channel:
+                channel_cfg = channels.get(args.channel, {})
+                target_cats = set(channel_cfg.get("categories", []))
+                active_categories = [cat for cat in active_categories if cat in target_cats]
+
             from src.ingestion.scraper_job import run_ingestion_phase
 
             if first_run:
-                logging.info("Initial startup: Scraping all categories to refresh backlog.")
-                run_ingestion_phase(target_category=None)
+                if args.category or args.channel:
+                    logging.info(f"Initial startup: Scraping target categories {active_categories} to refresh backlog.")
+                    for cat in active_categories:
+                        run_ingestion_phase(target_category=cat)
+                else:
+                    logging.info("Initial startup: Scraping all categories to refresh backlog.")
+                    run_ingestion_phase(target_category=None)
                 first_run = False
             else:
                 # Find categories that are empty
@@ -337,17 +360,17 @@ def main():
         # PHASE 2: VIDEO GENERATION (per-channel, 8 videos each)
         # ---------------------------------------------------------
         VIDEOS_PER_CHANNEL = 8
-        channels = get_all_channels()
-        total_target = len(channels) * VIDEOS_PER_CHANNEL
+        target_channels = {k: v for k, v in channels.items() if (not args.channel or k.lower() == args.channel.lower())}
+        total_target = len(target_channels) * VIDEOS_PER_CHANNEL
         
-        logging.info(f"PHASE 2: Starting Video Generation — {len(channels)} channels × {VIDEOS_PER_CHANNEL} videos = {total_target} target")
+        logging.info(f"PHASE 2: Starting Video Generation — {len(target_channels)} channels × {VIDEOS_PER_CHANNEL} videos = {total_target} target")
         
         try:
             from src.storage.database import get_pending_tweet_for_category, mark_tweet_status
             from src.ingestion.orchestrator import generate_topics_from_tweets
             from src.ingestion.filter import filter_and_cache_topics, remove_from_cache
             
-            for channel_name, channel_cfg in channels.items():
+            for channel_name, channel_cfg in target_channels.items():
                 if global_success_count >= MAX_TOTAL_VIDEOS:
                     break
 
@@ -356,6 +379,10 @@ def main():
                     continue
                 
                 channel_categories = channel_cfg.get("categories", [])
+                if args.category:
+                    channel_categories = [c for c in channel_categories if c.lower() == args.category.lower()]
+                    if not channel_categories:
+                        continue
                 channel_success = 0
                 
                 logging.info(f"=== Channel '{channel_name}' — categories: {channel_categories} ===")
@@ -442,6 +469,10 @@ def main():
             break
         except Exception as e:
             logging.error(f"Phase 2 failed: {e}")
+
+        if args.once:
+            logging.info("Single cycle run (--once) completed successfully. Exiting.")
+            break
 
         elapsed = time.time() - cycle_start
         logging.info(f"--- Cycle complete in {elapsed:.1f}s. Sleeping {SCHEDULER_INTERVAL // 60} minutes... ---")

@@ -177,12 +177,33 @@ Edit `config/accounts.json` to configure which X accounts to monitor per categor
 
 ## 🎬 Usage
 
-Start the continuous scheduler:
+### Run All Channels (Continuous 5-Minute Scheduler):
 ```bash
 python main.py
 ```
 
-Skip specific channels:
+### Run One Channel Only:
+```bash
+# Run only World News & Tech channel
+python main.py --channel tech_world
+
+# Run only Cdrama entertainment channel
+python main.py --channel entertainment
+
+# Run only Sports channel
+python main.py --channel sports
+
+# Run only Anime channel
+python main.py --channel anime
+```
+
+### Run a Single Pass and Exit (No Continuous Loop):
+```bash
+# Generate 1 video for world news and exit
+python main.py --channel tech_world --category world --max-videos 1 --once
+```
+
+### Skip Specific Channels:
 ```bash
 python main.py --skip-channel sports --skip-channel entertainment
 ```
